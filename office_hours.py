@@ -1,9 +1,14 @@
 #!/usr/bin/env python
 
 import datetime
-import sys
 import os.path
 import json
+import argparse
+
+def deltaToStr(tdelta):
+    hours, rem = divmod(tdelta.seconds, 3600)
+    minutes, rem = divmod(rem, 60)
+    return "{:02d}:{:02d}".format(hours, minutes)
 
 class OfficeHours:
     LJ=datetime.timedelta(hours=8,minutes=42)
@@ -14,11 +19,11 @@ class OfficeHours:
         self._filename = filename
         self._hours = { 'start': None, 'stop': None, 'pauses': [] }
         if os.path.isfile(filename):
-            #would load file
-            self._load(filename)
+            self._load()
 
     def _load(self):
-        pass
+        with open(self._filename) as json_file:
+            self._hours = json.load(json_file)
 
     def _calcRemainings(self, entry):
         delta=OfficeHours.LJ
@@ -29,17 +34,16 @@ class OfficeHours:
         workedTime = entry-startTime
         remainingTime = exitTime-entry
         self._hours['exit'] = exitTime.strftime(OfficeHours.datefmt)
-        self._hours['worked'] = str(workedTime)
-        self._hours['remaining'] = str(remainingTime)
-        self._hours['total'] = str(delta)
+        self._hours['worked'] = deltaToStr(workedTime)
+        self._hours['remaining'] = deltaToStr(remainingTime)
+        self._hours['total'] = deltaToStr(delta)
 
 
     def _writeToFile(self):
         if self._filename != "":
             with open(self._filename, "w") as outfile:
                 json.dump(self._hours, outfile, sort_keys=True, indent=4)
-        else:
-            print json.dumps(self._hours, sort_keys=True, indent=4)
+        print json.dumps(self._hours, sort_keys=True, indent=4)
 
     def start(self, entry=datetime.datetime.now()):
         #Check not started
@@ -52,11 +56,7 @@ class OfficeHours:
         self._writeToFile()
 
     def stop(self, entry=datetime.datetime.now()):
-        #Check not stopped
-        if self._hours['stop'] != None:
-            print("Error!, already stopped")
-        else:
-            self._hours['stop'] = entry.strftime(OfficeHours.datefmt)
+        self._hours['stop'] = entry.strftime(OfficeHours.datefmt)
         self._calcRemainings(entry)
         self._writeToFile()
         pass
@@ -64,19 +64,19 @@ class OfficeHours:
     def pause(self, entry=datetime.datetime.now()):
         pass
 
-def main(argv):
-    try:
-        if argv[1] == "start":
-            OfficeHours().start()
-        elif argv[1] == "stop":
-            OfficeHours().stop()
-        elif argv[1] == "pause":
-            OfficeHours.pause()
-        else:
-            print "Undefined action!, choose start/pause/stop"
-    except IndexError:
-        print "Choose action!, choose start/pause/stop"
+def main(args):
+    if args.action == "start":
+        OfficeHours(args.filename).start()
+    elif args.action == "stop":
+        OfficeHours(args.filename).stop()
+    elif args.action == "pause":
+        OfficeHours(args.filename).pause()
+    else:
+        print "Undefined action!, choose start/pause/stop"
         
 if __name__ == "__main__":
-    main(sys.argv)
+    parser = argparse.ArgumentParser(description="Record and provide info on working hours for a day")
+    parser.add_argument('action', choices=['start', 'pause', 'stop'], help='The action to take')
+    parser.add_argument('-f', default="", dest='filename', help="File to store the info")
+    main(parser.parse_args())
 
