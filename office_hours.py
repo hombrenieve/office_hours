@@ -42,7 +42,7 @@ class OfficeHours:
     def _writeToFile(self):
         if self._filename != "":
             with open(self._filename, "w") as outfile:
-                json.dump(self._hours, outfile, sort_keys=True, indent=4)
+                json.dump(self._hours, outfile)
         print json.dumps(self._hours, sort_keys=True, indent=4)
 
     def start(self, entry=datetime.datetime.now()):
@@ -52,23 +52,35 @@ class OfficeHours:
             print("Error!, already started")
         else:
             self._hours['start'] = entry.strftime(OfficeHours.datefmt)
-        self._calcRemainings(entry)
-        self._writeToFile()
+            self._calcRemainings(entry)
+            self._writeToFile()
 
     def stop(self, entry=datetime.datetime.now()):
-        self._hours['stop'] = entry.strftime(OfficeHours.datefmt)
-        self._calcRemainings(entry)
-        self._writeToFile()
-        pass
+        if self._hours['start'] == None:
+            print("Error!, you must start first.")
+        else:
+            self._hours['stop'] = entry.strftime(OfficeHours.datefmt)
+            self._calcRemainings(entry)
+            self._writeToFile()
 
     def pause(self, entry=datetime.datetime.now()):
         pass
+
+    def update(self, entry=datetime.datetime.now()):
+        if self._hours['start'] == None:
+            print("Not started yet!")
+        else:
+            self._calcRemainings(entry)
+            self._writeToFile()
+
 
 def main(args):
     if args.action == "start":
         OfficeHours(args.filename).start()
     elif args.action == "stop":
         OfficeHours(args.filename).stop()
+    elif args.action == "update":
+        OfficeHours(args.filename).update()
     elif args.action == "pause":
         OfficeHours(args.filename).pause()
     else:
@@ -76,7 +88,7 @@ def main(args):
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Record and provide info on working hours for a day")
-    parser.add_argument('action', choices=['start', 'pause', 'stop'], help='The action to take')
+    parser.add_argument('action', choices=['start', 'pause', 'stop', 'update'], help='The action to take')
     parser.add_argument('-f', default="", dest='filename', help="File to store the info")
     main(parser.parse_args())
 
