@@ -43,17 +43,20 @@ class OfficeHours:
         if self._filename != "":
             with open(self._filename, "w") as outfile:
                 json.dump(self._hours, outfile)
+
+    def _printInfo(self):
         print json.dumps(self._hours, sort_keys=True, indent=4)
 
     def start(self, entry=datetime.datetime.now()):
         #Check not started
         if self._hours['start'] != None:
             #it might be an incomplete pause... check!
-            print("Error!, already started")
+            pass
         else:
             self._hours['start'] = entry.strftime(OfficeHours.datefmt)
-            self._calcRemainings(entry)
-            self._writeToFile()
+        self._calcRemainings(entry)
+        self._writeToFile()
+        print("Started, expected exit {}".format(self._hours['exit']))
 
     def stop(self, entry=datetime.datetime.now()):
         if self._hours['start'] == None:
@@ -62,6 +65,7 @@ class OfficeHours:
             self._hours['stop'] = entry.strftime(OfficeHours.datefmt)
             self._calcRemainings(entry)
             self._writeToFile()
+            print("Stopped, worked time is {} remaining {}".format(self._hours['worked'], self._hours['remaining']))
 
     def pause(self, entry=datetime.datetime.now()):
         pass
@@ -72,6 +76,7 @@ class OfficeHours:
         else:
             self._calcRemainings(entry)
             self._writeToFile()
+            self._printInfo()
 
 
 def main(args):
