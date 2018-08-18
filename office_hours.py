@@ -14,16 +14,33 @@ class OfficeHours:
     LJ=datetime.timedelta(hours=8,minutes=42)
     V=datetime.timedelta(hours=6,minutes=30)
     datefmt="%Y/%m/%d %H:%M"
+    hourInit={ 'start': None, 'stop': None, 'pauses': [] }
 
     def __init__(self, filename=""):
         self._filename = filename
-        self._hours = { 'start': None, 'stop': None, 'pauses': [] }
+        self._hours = OfficeHours.hourInit
+        self._append = True
         if os.path.isfile(filename):
             self._load()
+            #Check is not finished
+            if self._hours['stop'] != None:
+                self._hours = OfficeHours.hourInit
+            else:
+                #Check already finished but not logged
+                startTime = datetime.datetime.strptime(self._hours['start'], OfficeHours.datefmt)
+                if startTime.date() != datetime.datetime.now().date():
+                    self._dateMismatched(startTime)
+                    self._hours = OfficeHours.hourInit
+                    self._append = True
+                else:
+                    self._append = False
 
     def _load(self):
+        #always return last logged line
         with open(self._filename) as json_file:
-            self._hours = json.load(json_file)
+            logged = json_file.readlines()
+            if(len(logged) > 0):
+                self._hours = json.loads(logged[-1])
 
     def _calcRemainings(self, entry):
         delta=OfficeHours.LJ
@@ -41,11 +58,32 @@ class OfficeHours:
 
     def _writeToFile(self):
         if self._filename != "":
-            with open(self._filename, "w") as outfile:
-                json.dump(self._hours, outfile)
+                logged = []
+                if os.path.isfile(self._filename):
+                    logged = open(self._filename, 'r').readlines()
+                if len(logged) == 0 or self._append:
+                    logged.append(json.dumps(self._hours)+os.linesep)
+                else:
+                    logged[-1] = json.dumps(self._hours)+os.linesep
+                open(self._filename, 'w').writelines(logged)
 
     def _printInfo(self):
         print json.dumps(self._hours, sort_keys=True, indent=4)
+
+    def _dateMismatched(self, startTime):
+        print "Mismatching date!, looking in the logs the last activity to close the file"
+        dates = startTime.strftime("%b %d")
+        hour = ''
+        with open('/var/log/syslog', 'r') as f:
+            for line in f:
+                if line.startswith(dates):
+                    hour = line.split(' ')[2]
+        if hour == '':
+            print "Error!, not matching date found!"
+        else:
+            endTime = datetime.datetime.combine(startTime.date(), datetime.datetime.strptime(hour, "%H:%M:%S").time())
+            self._append = False
+            self.stop(endTime)
 
     def start(self, entry=datetime.datetime.now()):
         #Check not started
