@@ -1,35 +1,31 @@
 import dbus
-import dbus.service
 import gobject
 from dbus.mainloop.glib import DBusGMainLoop
 from datetime import datetime
-import os
-
-FILENAME = os.environ['HOME']+"/.sessionLock.log"
-
-OPATH_SERVICE = "/org/sessionLogger"
-IFACE_SERVICE = "org.sessionLogger"
-BUS_NAME_SERVICE = "org.sessionLogger"
+import signal
+import sys
+import argparse
 
 IFACE_SCREENSAVER = "org.gnome.ScreenSaver"
 MEMBER_SCREENSAVER = "ActiveChanged"
 
-class SessionLockLogger(dbus.service.Object):
+class SessionLockLogger:
     def __init__(self, loop, logFile):
         self.loop = loop
         self.log = logFile
+        signal.signal(signal.SIGHUP, self.stop)
+        signal.signal(signal.SIGINT, self.stop)
+        signal.signal(signal.SIGTERM, self.stop)
+        signal.signal(signal.SIGQUIT, self.stop)
         self.session_bus = dbus.SessionBus()
-        self.session_bus.request_name(BUS_NAME_SERVICE)
-        bus_name = dbus.service.BusName(BUS_NAME_SERVICE, bus=self.session_bus)
-        dbus.service.Object.__init__(self, bus_name, OPATH_SERVICE)
-        self.session_bus.add_signal_receiver(self.stop, "Stop")
         self.session_bus.add_signal_receiver(self.handler, dbus_interface=IFACE_SCREENSAVER, message_keyword='message')
         self.writeLog("Start")
+
     def writeLog(self, command):
         self.log.write(command+" "+str(datetime.now())+"\n")
         self.log.flush()
 
-    def stop(self):
+    def stop(self, signalNumber, frame):
         self.writeLog("Stop")
         self.loop.quit()
 
@@ -40,12 +36,13 @@ class SessionLockLogger(dbus.service.Object):
             else:
                 self.writeLog("Unlock")
 
-def main():
+def main(args):
     DBusGMainLoop(set_as_default=True)
     loop = gobject.MainLoop()
-    with open(FILENAME, "a") as logFile:
-        sessionLogger = SessionLockLogger(loop, logFile)
-        loop.run()
+    sessionLogger = SessionLockLogger(loop, args.outfile)
+    loop.run()
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="Record locks and unlocks of screen")
+    parser.add_argument('-f', default=sys.stdout, dest='outfile', type=argparse.FileType('a'), help="File to store the info")
+    main(parser.parse_args())
