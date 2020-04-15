@@ -22,7 +22,8 @@ class SessionLockLogger:
         self.writeLog("Start")
 
     def writeLog(self, command):
-        self.log.write(command+" "+str(datetime.now())+"\n")
+        time = datetime.now().strftime("%Y/%m/%d-%H:%M")
+        self.log.write(time+" "+command+"\n")
         self.log.flush()
 
     def stop(self, signalNumber, frame):
