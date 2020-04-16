@@ -10,9 +10,9 @@ IFACE_SCREENSAVER = "org.gnome.ScreenSaver"
 MEMBER_SCREENSAVER = "ActiveChanged"
 
 class SessionLockLogger:
-    def __init__(self, loop, logFile):
+    def __init__(self, loop, logFileName):
         self.loop = loop
-        self.log = logFile
+        self.log = logFileName
         signal.signal(signal.SIGHUP, self.stop)
         signal.signal(signal.SIGINT, self.stop)
         signal.signal(signal.SIGTERM, self.stop)
@@ -23,8 +23,12 @@ class SessionLockLogger:
 
     def writeLog(self, command):
         time = datetime.now().strftime("%Y/%m/%d-%H:%M")
-        self.log.write(time+" "+command+"\n")
-        self.log.flush()
+        trace = time+" "+command+"\n"
+        if self.log == None:
+            sys.stdout.write(trace)
+        else:
+            with open(self.log, "a") as log:
+                log.write(trace)
 
     def stop(self, signalNumber, frame):
         self.writeLog("Stop")
@@ -45,5 +49,5 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Record locks and unlocks of screen")
-    parser.add_argument('-f', default=sys.stdout, dest='outfile', type=argparse.FileType('a'), help="File to store the info")
+    parser.add_argument('-f', default=None, dest='outfile', help="File to store the info")
     main(parser.parse_args())
