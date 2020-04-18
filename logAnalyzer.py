@@ -1,5 +1,6 @@
 from datetime import datetime,timedelta
 import sys
+import json
 
 logdatefmt="%Y/%m/%d-%H:%M"
 
@@ -15,7 +16,8 @@ def deltaToStr(tdelta):
 def dayHoursToStr(dTime):
     return dTime.strftime("%H:%M")
 
-def main(filename):
+def report(filename):
+    data = {}
     working = timedelta()
     resting = timedelta()
     with open(filename, "r") as infile:
@@ -29,13 +31,13 @@ def main(filename):
                 else:
                     resting += delta
             else:
-                print("Day started at "+dayHoursToStr(newTP[0]))
+                data['start'] = dayHoursToStr(newTP[0])
             tp = newTP
-        print("Day ended at "+dayHoursToStr(tp[0]))
-    print("Total accounts: ")
-    print("    working: "+deltaToStr(working))
-    print("    resting: "+deltaToStr(resting))
+        data['end'] = dayHoursToStr(tp[0])
+    data['working'] = deltaToStr(working)
+    data['resting'] = deltaToStr(resting)
+    return json.dumps(data)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    print report(sys.argv[1])
