@@ -17,14 +17,15 @@ def deltaToStr(tdelta):
 def dayHoursToStr(dTime):
     return dTime.strftime("%H:%M")
 
-def report(filename):
+def report(lines):
     data = {}
     working = timedelta()
     resting = timedelta()
-    with open(filename, "r") as infile:
-        tp = lineToTimepoint(infile.readline().rstrip())
-        data['start'] = dayHoursToStr(tp[0])
-        for line in infile:
+
+    if(lines != None and len(lines) > 0):
+        tp = lineToTimepoint(lines[0].rstrip())
+        start = tp[0]
+        for line in lines[1:]:
             newTP = lineToTimepoint(line.rstrip())
             delta = newTP[0]-tp[0]
             if tp[1]:
@@ -33,18 +34,24 @@ def report(filename):
                 resting += delta
             tp = newTP
 
-    if tp[1]:
-        #fake timepoint
-        tpf = (datetime.now(), False)
-        delta = tpf[0] - tp[0]
-        working += delta
-        tp = tpf
+        if tp[1]:
+            #fake timepoint
+            tpf = datetime.now()
+            delta = tpf - tp[0]
+            working += delta
+            end = tpf
+        else:
+            end = tp[0]
 
-    data['end'] = dayHoursToStr(tp[0])
-    data['working'] = deltaToStr(working)
-    data['resting'] = deltaToStr(resting)
+        data['start'] = dayHoursToStr(start)
+        data['end'] = dayHoursToStr(end)
+        data['total'] = deltaToStr(end-start)
+        data['working'] = deltaToStr(working)
+        data['resting'] = deltaToStr(resting)
     return json.dumps(data)
 
 
 if __name__ == "__main__":
-    print report(sys.argv[1])
+    with open(sys.argv[1], "r") as infile:
+        lines = infile.readlines()
+    print(report(lines))
