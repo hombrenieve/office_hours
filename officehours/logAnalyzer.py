@@ -50,16 +50,22 @@ class Report:
                 end = tpf
             else:
                 end = tp[0]
+        else:
+            return "{}"
 
-            data['start'] = self._dayHoursToStr(start)
-            data['end'] = self._dayHoursToStr(end)
-            total = end-start
-            if(total.days > 0):
-                raise ValueError("Time account exceeds a day")
-            data['total'] = self._deltaToStr(total)
-            data['working'] = self._deltaToStr(working)
-            data['resting'] = self._deltaToStr(resting)
-        return json.dumps(data)
+        return json.dumps(self._build(start, end, working, resting))
+
+    def _build(self, start, end, working, resting):
+        data = {}
+        data['start'] = self._dayHoursToStr(start)
+        data['end'] = self._dayHoursToStr(end)
+        total = end-start
+        if(total.days > 0):
+            raise ValueError("Time account exceeds a day")
+        data['total'] = self._deltaToStr(total)
+        data['working'] = self._deltaToStr(working)
+        data['resting'] = self._deltaToStr(resting)
+        return data
 
 if __name__ == "__main__":
     with open(sys.argv[1], "r") as infile:
