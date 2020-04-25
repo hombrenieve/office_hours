@@ -39,12 +39,11 @@ class Report:
     def report(self):
         working = timedelta()
         resting = timedelta()
-
-        if(self._lines != None and len(self._lines) > 0):
-            tp = TimePoint(self._lines[0])
+        timepoints = map(TimePoint, self._lines)
+        try:
+            tp = next(timepoints)
             start = tp.getTime()
-            for line in self._lines[1:]:
-                newTP = TimePoint(line)
+            for newTP in timepoints:
                 delta = newTP.getTime()-tp.getTime()
                 if tp.isUnlock():
                     working += delta
@@ -60,7 +59,7 @@ class Report:
                 end = tpf
             else:
                 end = tp.getTime()
-        else:
+        except StopIteration:
             return "{}"
 
         return json.dumps(self._build(start, end, working, resting))
