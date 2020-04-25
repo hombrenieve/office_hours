@@ -17,6 +17,9 @@ def deltaToStr(tdelta):
 def dayHoursToStr(dTime):
     return dTime.strftime("%H:%M")
 
+def now():
+    return datetime.now()
+
 def report(lines):
     data = {}
     working = timedelta()
@@ -36,7 +39,7 @@ def report(lines):
 
         if tp[1]:
             #fake timepoint
-            tpf = datetime.now()
+            tpf = now()
             delta = tpf - tp[0]
             working += delta
             end = tpf
@@ -45,7 +48,10 @@ def report(lines):
 
         data['start'] = dayHoursToStr(start)
         data['end'] = dayHoursToStr(end)
-        data['total'] = deltaToStr(end-start)
+        total = end-start
+        if(total.days > 0):
+            raise ValueError("Time account exceeds a day")
+        data['total'] = deltaToStr(total)
         data['working'] = deltaToStr(working)
         data['resting'] = deltaToStr(resting)
     return json.dumps(data)
