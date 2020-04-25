@@ -6,7 +6,7 @@ logdatefmt="%Y/%m/%d-%H:%M"
 
 class TimePoint:
     def __init__(self, line):
-        lineSplit = line.split(" ")
+        lineSplit = line.rstrip().split(" ")
         self._time = datetime.strptime(lineSplit[0], logdatefmt)
         self._command = lineSplit[1]
 
@@ -25,10 +25,6 @@ class Report:
     def __init__(self, lines):
         self._lines = lines
 
-    def _lineToTimepoint(self, line):
-        tp = TimePoint(line)
-        return (tp.getTime(), tp.isUnlock())
-
     def _deltaToStr(self, tdelta):
         hours, rem = divmod(tdelta.seconds, 3600)
         minutes, rem = divmod(rem, 60)
@@ -45,25 +41,25 @@ class Report:
         resting = timedelta()
 
         if(self._lines != None and len(self._lines) > 0):
-            tp = self._lineToTimepoint(self._lines[0].rstrip())
-            start = tp[0]
+            tp = TimePoint(self._lines[0])
+            start = tp.getTime()
             for line in self._lines[1:]:
-                newTP = self._lineToTimepoint(line.rstrip())
-                delta = newTP[0]-tp[0]
-                if tp[1]:
+                newTP = TimePoint(line)
+                delta = newTP.getTime()-tp.getTime()
+                if tp.isUnlock():
                     working += delta
                 else:
                     resting += delta
                 tp = newTP
 
-            if tp[1]:
+            if tp.isUnlock():
                 #fake timepoint
                 tpf = self.now()
-                delta = tpf - tp[0]
+                delta = tpf - tp.getTime()
                 working += delta
                 end = tpf
             else:
-                end = tp[0]
+                end = tp.getTime()
         else:
             return "{}"
 
