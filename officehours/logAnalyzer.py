@@ -4,15 +4,30 @@ import json
 
 logdatefmt="%Y/%m/%d-%H:%M"
 
+class TimePoint:
+    def __init__(self, line):
+        lineSplit = line.split(" ")
+        self._time = datetime.strptime(lineSplit[0], logdatefmt)
+        self._command = lineSplit[1]
+
+    def getTime(self):
+        return self._time
+    
+    def isUnlock(self):
+        return self._command == "Start" or self._command == "Unlock"
+    
+    def isLock(self):
+        return self._command == "Stop" or self._command == "Lock"
+
+
 class Report:
 
     def __init__(self, lines):
         self._lines = lines
 
     def _lineToTimepoint(self, line):
-        lineSplit = line.split(" ")
-        return (datetime.strptime(lineSplit[0], logdatefmt), 
-                lineSplit[1] == "Start" or lineSplit[1] == "Unlock")
+        tp = TimePoint(line)
+        return (tp.getTime(), tp.isUnlock())
 
     def _deltaToStr(self, tdelta):
         hours, rem = divmod(tdelta.seconds, 3600)
@@ -26,7 +41,6 @@ class Report:
         return datetime.now()
 
     def report(self):
-        data = {}
         working = timedelta()
         resting = timedelta()
 
