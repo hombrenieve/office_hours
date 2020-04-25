@@ -23,7 +23,7 @@ class TimePoint:
 class Report:
 
     def __init__(self, lines):
-        self._timepointIterator = map(TimePoint, lines)
+        self._timepoints = list(map(TimePoint, lines))
         self._start = None
         self._end = None
         self._working = timedelta()
@@ -40,28 +40,42 @@ class Report:
     def now(self):
         return datetime.now()
 
-    def report(self):
-        try:
-            tp = next(self._timepointIterator)
-            self._start = tp.getTime()
-            for newTP in self._timepointIterator:
-                delta = newTP.getTime()-tp.getTime()
-                if tp.isUnlock():
-                    self._working += delta
-                else:
-                    self._resting += delta
-                tp = newTP
+    def _isEmpty(self):
+        return len(self._timepoints) == 0
 
-            if tp.isUnlock():
-                #fake timepoint
-                tpf = self.now()
-                delta = tpf - tp.getTime()
-                self._working += delta
-                self._end = tpf
-            else:
-                self._end = tp.getTime()
-        except StopIteration:
+    def _processTimepoint(self, prev, curr):
+        delta = curr.getTime()-prev.getTime()
+        if prev.isUnlock():
+            self._working += delta
+        else:
+            self._resting += delta
+    
+    def _calculateStartTime(self):
+        return self._timepoints[0].getTime()
+
+    def _calculateEndTime(self):
+        if self._timepoints[-1].isUnlock():
+            #fake timepoint
+            tpf = self.now()
+            delta = tpf - self._timepoints[-1].getTime()
+            self._working += delta
+            return tpf
+        else:
+            return self._timepoints[-1].getTime()
+    
+    def _calculateWorkingHours(self):
+        tp = self._timepoints[0]
+        for newTP in self._timepoints[1:]:
+            self._processTimepoint(tp, newTP)
+            tp = newTP
+
+    def report(self):
+        if(self._isEmpty()):
             return "{}"
+
+        self._start = self._calculateStartTime()
+        self._calculateWorkingHours()
+        self._end = self._calculateEndTime()
 
         return json.dumps(self._build())
 
