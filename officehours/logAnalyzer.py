@@ -23,7 +23,11 @@ class TimePoint:
 class Report:
 
     def __init__(self, lines):
-        self._lines = lines
+        self._timepointIterator = map(TimePoint, lines)
+        self._start = None
+        self._end = None
+        self._working = timedelta()
+        self._resting = timedelta()
 
     def _deltaToStr(self, tdelta):
         hours, rem = divmod(tdelta.seconds, 3600)
@@ -37,43 +41,40 @@ class Report:
         return datetime.now()
 
     def report(self):
-        working = timedelta()
-        resting = timedelta()
-        timepoints = map(TimePoint, self._lines)
         try:
-            tp = next(timepoints)
-            start = tp.getTime()
-            for newTP in timepoints:
+            tp = next(self._timepointIterator)
+            self._start = tp.getTime()
+            for newTP in self._timepointIterator:
                 delta = newTP.getTime()-tp.getTime()
                 if tp.isUnlock():
-                    working += delta
+                    self._working += delta
                 else:
-                    resting += delta
+                    self._resting += delta
                 tp = newTP
 
             if tp.isUnlock():
                 #fake timepoint
                 tpf = self.now()
                 delta = tpf - tp.getTime()
-                working += delta
-                end = tpf
+                self._working += delta
+                self._end = tpf
             else:
-                end = tp.getTime()
+                self._end = tp.getTime()
         except StopIteration:
             return "{}"
 
-        return json.dumps(self._build(start, end, working, resting))
+        return json.dumps(self._build())
 
-    def _build(self, start, end, working, resting):
-        total = end-start
+    def _build(self):
+        total = self._end-self._start
         if(total.days > 0):
             raise ValueError("Time account exceeds a day")
         return {
-            'start': self._dayHoursToStr(start),
-            'end': self._dayHoursToStr(end),
+            'start': self._dayHoursToStr(self._start),
+            'end': self._dayHoursToStr(self._end),
             'total': self._deltaToStr(total),
-            'working': self._deltaToStr(working),
-            'resting': self._deltaToStr(resting)
+            'working': self._deltaToStr(self._working),
+            'resting': self._deltaToStr(self._resting)
         }
 
 if __name__ == "__main__":
