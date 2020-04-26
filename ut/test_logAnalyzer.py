@@ -121,13 +121,13 @@ class TestLogAnalyzer(unittest.TestCase):
             logAnalyzer.Report(logs).report()
         self.assertTrue('Time account exceeds a day' in str(context.exception))
 
-    @mock.patch('officehours.logAnalyzer.Report.now', side_effect=defaultEnd)
+    @mock.patch('officehours.logAnalyzer._now', side_effect=defaultEnd)
     def test_checkCurrentDay(self, now_function):
         logs = LogBuilder().start().build()
         report = report = ReportBuilder().working("09:30").resting("00:00").build()
         self.assertEqual(logAnalyzer.Report(logs).report(), report)
     
-    @mock.patch('officehours.logAnalyzer.Report.now', side_effect=defaultEnd)
+    @mock.patch('officehours.logAnalyzer._now', side_effect=defaultEnd)
     def test_checkCurrentDayWithPause(self, now_function):
         logs = LogBuilder().start().pause("13:00", "14:00").build()
         report = report = ReportBuilder().build()

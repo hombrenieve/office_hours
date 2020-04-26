@@ -19,68 +19,67 @@ class TimePoint:
     def isLock(self):
         return self._command == "Stop" or self._command == "Lock"
 
-def _calculateStartTime(timepoints):
-    return timepoints[0].getTime()
+def _deltaToStr(tdelta):
+        hours, rem = divmod(tdelta.seconds, 3600)
+        minutes, rem = divmod(rem, 60)
+        return "{:02d}:{:02d}".format(hours, minutes)
 
-def _processWorkingHours(prev, curr):
-    delta = curr.getTime()-prev.getTime()
-    if prev.isUnlock():
-        return delta
-    else:
-        return timedelta()
+def _dayHoursToStr(dTime):
+    return dTime.strftime("%H:%M")
 
-def _processRestingHours(prev, curr):
-    delta = curr.getTime()-prev.getTime()
-    if prev.isLock():
-        return delta
-    else:
-        return timedelta()
+def _now():
+    return datetime.now()
 
-def _calculateOfficeHours(timepoints, processor):
-    time = timedelta()
-    tp = timepoints[0]
-    for newTP in timepoints[1:]:
-        time += processor(tp, newTP)
-        tp = newTP
-    return time
 
 class Report:
 
     def __init__(self, lines):
         self._timepoints = list(map(TimePoint, lines))
-
-    def _deltaToStr(self, tdelta):
-        hours, rem = divmod(tdelta.seconds, 3600)
-        minutes, rem = divmod(rem, 60)
-        return "{:02d}:{:02d}".format(hours, minutes)
-
-    def _dayHoursToStr(self, dTime):
-        return dTime.strftime("%H:%M")
-
-    def now(self):
-        return datetime.now()
+        self._start = None
+        self._end = None
+        self._working = timedelta()
+        self._resting = timedelta()
 
     def _isEmpty(self):
         return len(self._timepoints) == 0
 
+    def _calculateStartTime(self,):
+        self._start = self._timepoints[0].getTime()
+    
+    def _processWorkingHours(self, prev, curr):
+        delta = curr.getTime()-prev.getTime()
+        if prev.isUnlock():
+            self._working += delta
+
+    def _processRestingHours(self, prev, curr):
+        delta = curr.getTime()-prev.getTime()
+        if prev.isLock():
+            self._resting += delta
+
+    def _calculateOfficeHours(self, processor):
+        tp = self._timepoints[0]
+        for newTP in self._timepoints[1:]:
+            processor(tp, newTP)
+            tp = newTP
+
     def _calculateEndTime(self):
         if self._timepoints[-1].isUnlock():
             #fake timepoint
-            tpf = self.now()
+            tpf = _now()
             delta = tpf - self._timepoints[-1].getTime()
             self._working += delta
-            return tpf
+            self._end = tpf
         else:
-            return self._timepoints[-1].getTime()
+            self._end = self._timepoints[-1].getTime()
 
     def report(self):
         if(self._isEmpty()):
             return "{}"
 
-        self._start = _calculateStartTime(self._timepoints)
-        self._working = _calculateOfficeHours(self._timepoints, _processWorkingHours)
-        self._resting = _calculateOfficeHours(self._timepoints, _processRestingHours)
-        self._end = self._calculateEndTime()
+        self._calculateStartTime()
+        self._calculateOfficeHours(self._processWorkingHours)
+        self._calculateOfficeHours(self._processRestingHours)
+        self._calculateEndTime()
 
         return json.dumps(self._build())
 
@@ -89,11 +88,11 @@ class Report:
         if(total.days > 0):
             raise ValueError("Time account exceeds a day")
         return {
-            'start': self._dayHoursToStr(self._start),
-            'end': self._dayHoursToStr(self._end),
-            'total': self._deltaToStr(total),
-            'working': self._deltaToStr(self._working),
-            'resting': self._deltaToStr(self._resting)
+            'start': _dayHoursToStr(self._start),
+            'end': _dayHoursToStr(self._end),
+            'total': _deltaToStr(total),
+            'working': _deltaToStr(self._working),
+            'resting': _deltaToStr(self._resting)
         }
 
 if __name__ == "__main__":
