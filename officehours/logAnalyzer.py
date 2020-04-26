@@ -48,10 +48,6 @@ class Report:
 
     def __init__(self, lines):
         self._timepoints = list(map(TimePoint, lines))
-        self._start = None
-        self._end = None
-        self._working = timedelta()
-        self._resting = timedelta()
 
     def _deltaToStr(self, tdelta):
         hours, rem = divmod(tdelta.seconds, 3600)
