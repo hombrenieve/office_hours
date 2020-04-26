@@ -19,6 +19,30 @@ class TimePoint:
     def isLock(self):
         return self._command == "Stop" or self._command == "Lock"
 
+def _calculateStartTime(timepoints):
+    return timepoints[0].getTime()
+
+def _processWorkingHours(prev, curr):
+    delta = curr.getTime()-prev.getTime()
+    if prev.isUnlock():
+        return delta
+    else:
+        return timedelta()
+
+def _processRestingHours(prev, curr):
+    delta = curr.getTime()-prev.getTime()
+    if prev.isLock():
+        return delta
+    else:
+        return timedelta()
+
+def _calculateOfficeHours(timepoints, processor):
+    time = timedelta()
+    tp = timepoints[0]
+    for newTP in timepoints[1:]:
+        time += processor(tp, newTP)
+        tp = newTP
+    return time
 
 class Report:
 
@@ -43,16 +67,6 @@ class Report:
     def _isEmpty(self):
         return len(self._timepoints) == 0
 
-    def _processTimepoint(self, prev, curr):
-        delta = curr.getTime()-prev.getTime()
-        if prev.isUnlock():
-            self._working += delta
-        else:
-            self._resting += delta
-    
-    def _calculateStartTime(self):
-        return self._timepoints[0].getTime()
-
     def _calculateEndTime(self):
         if self._timepoints[-1].isUnlock():
             #fake timepoint
@@ -62,19 +76,14 @@ class Report:
             return tpf
         else:
             return self._timepoints[-1].getTime()
-    
-    def _calculateWorkingHours(self):
-        tp = self._timepoints[0]
-        for newTP in self._timepoints[1:]:
-            self._processTimepoint(tp, newTP)
-            tp = newTP
 
     def report(self):
         if(self._isEmpty()):
             return "{}"
 
-        self._start = self._calculateStartTime()
-        self._calculateWorkingHours()
+        self._start = _calculateStartTime(self._timepoints)
+        self._working = _calculateOfficeHours(self._timepoints, _processWorkingHours)
+        self._resting = _calculateOfficeHours(self._timepoints, _processRestingHours)
         self._end = self._calculateEndTime()
 
         return json.dumps(self._build())
