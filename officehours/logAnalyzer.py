@@ -19,73 +19,90 @@ class TimePoint:
     def isLock(self):
         return self._command == "Stop" or self._command == "Lock"
 
-def _deltaToStr(tdelta):
+class ReportBuilder:
+    def __init__(self, report):
+        self.__report = report
+
+    @staticmethod
+    def __deltaToStr(tdelta):
         hours, rem = divmod(tdelta.seconds, 3600)
         minutes, rem = divmod(rem, 60)
         return "{:02d}:{:02d}".format(hours, minutes)
 
-def _dayHoursToStr(dTime):
-    return dTime.strftime("%H:%M")
+    @staticmethod
+    def __dayHoursToStr(dTime):
+        return dTime.strftime("%H:%M")
 
-def _now():
-    return datetime.now()
-
-def _proccessHours(prev, curr, condition):
-    delta = curr.getTime() - prev.getTime()
-    if condition:
-        return delta
-    else:
-        return timedelta()
+    def build(self):
+        return {
+            'start': ReportBuilder.__dayHoursToStr(self.__report["_Report__start"]),
+            'end': ReportBuilder.__dayHoursToStr(self.__report["_Report__end"]),
+            'total': ReportBuilder.__deltaToStr(self.__report["_Report__total"]),
+            'working': ReportBuilder.__deltaToStr(self.__report["_Report__working"]),
+            'resting': ReportBuilder.__deltaToStr(self.__report["_Report__resting"])
+        }
 
 
 class Report:
 
     def __init__(self, lines):
-        self._timepoints = list(map(TimePoint, lines))
-        self._start = None
-        self._end = None
-        self._total = None
-        self._working = timedelta()
-        self._resting = timedelta()
-        self._build()
+        self.__timepoints = list(map(TimePoint, lines))
+        self.__start = None
+        self.__end = None
+        self.__total = None
+        self.__working = timedelta()
+        self.__resting = timedelta()
+        try:
+            self.__build()
+        except IndexError:
+            pass
+
+    @staticmethod
+    def _now():
+        return datetime.now()
 
     def _isEmpty(self):
-        return len(self._timepoints) == 0
+        return len(self.__timepoints) == 0
 
     def _calculateStartTime(self,):
-        self._start = self._timepoints[0].getTime()
+        self.__start = self.__timepoints[0].getTime()
 
     def _processWorkingHours(self, prev, curr):
-        self._working += _proccessHours(prev, curr, prev.isUnlock())
+        self.__working += Report._proccessHours(prev, curr, prev.isUnlock())
 
     def _processRestingHours(self, prev, curr):
-        self._resting += _proccessHours(prev, curr, prev.isLock())
+        self.__resting += Report._proccessHours(prev, curr, prev.isLock())
+
+    @staticmethod
+    def _proccessHours(prev, curr, condition):
+        delta = curr.getTime() - prev.getTime()
+        if condition:
+            return delta
+        else:
+            return timedelta()
 
     def _calculateOfficeHours(self, processor):
-        tp = self._timepoints[0]
-        for newTP in self._timepoints[1:]:
+        tp = self.__timepoints[0]
+        for newTP in self.__timepoints[1:]:
             processor(tp, newTP)
             tp = newTP
 
     def _calculateEndTime(self):
-        if self._timepoints[-1].isUnlock():
+        if self.__timepoints[-1].isUnlock():
             #fake timepoint
-            tpf = _now()
-            delta = tpf - self._timepoints[-1].getTime()
-            self._working += delta
-            self._end = tpf
+            tpf = Report._now()
+            delta = tpf - self.__timepoints[-1].getTime()
+            self.__working += delta
+            self.__end = tpf
         else:
-            self._end = self._timepoints[-1].getTime()
+            self.__end = self.__timepoints[-1].getTime()
 
     def _calculateTotalTime(self):
-        self._total = self._end-self._start
-        if self._total.days > 0:
+        self.__total = self.__end - self.__start
+        if self.__total.days > 0:
             raise ValueError("Time account exceeds a day")
 
-    def _build(self):
-        if self._isEmpty():
-            return "{}"
-
+    def __build(self):
         self._calculateStartTime()
         self._calculateOfficeHours(self._processWorkingHours)
         self._calculateOfficeHours(self._processRestingHours)
@@ -93,13 +110,7 @@ class Report:
         self._calculateTotalTime()
 
     def report(self):
-        return "{}" if self._isEmpty() else json.dumps({
-            'start': _dayHoursToStr(self._start),
-            'end': _dayHoursToStr(self._end),
-            'total': _deltaToStr(self._total),
-            'working': _deltaToStr(self._working),
-            'resting': _deltaToStr(self._resting)
-        })
+        return "{}" if self._isEmpty() else json.dumps(ReportBuilder(self.__dict__).build())
 
 
 if __name__ == "__main__":
