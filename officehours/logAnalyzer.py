@@ -30,6 +30,13 @@ def _dayHoursToStr(dTime):
 def _now():
     return datetime.now()
 
+def _proccessHours(prev, curr, condition):
+    delta = curr.getTime() - prev.getTime()
+    if condition:
+        return delta
+    else:
+        return timedelta()
+
 
 class Report:
 
@@ -37,24 +44,22 @@ class Report:
         self._timepoints = list(map(TimePoint, lines))
         self._start = None
         self._end = None
+        self._total = None
         self._working = timedelta()
         self._resting = timedelta()
+        self._build()
 
     def _isEmpty(self):
         return len(self._timepoints) == 0
 
     def _calculateStartTime(self,):
         self._start = self._timepoints[0].getTime()
-    
+
     def _processWorkingHours(self, prev, curr):
-        delta = curr.getTime()-prev.getTime()
-        if prev.isUnlock():
-            self._working += delta
+        self._working += _proccessHours(prev, curr, prev.isUnlock())
 
     def _processRestingHours(self, prev, curr):
-        delta = curr.getTime()-prev.getTime()
-        if prev.isLock():
-            self._resting += delta
+        self._resting += _proccessHours(prev, curr, prev.isLock())
 
     def _calculateOfficeHours(self, processor):
         tp = self._timepoints[0]
@@ -72,28 +77,30 @@ class Report:
         else:
             self._end = self._timepoints[-1].getTime()
 
-    def report(self):
-        if(self._isEmpty()):
+    def _calculateTotalTime(self):
+        self._total = self._end-self._start
+        if self._total.days > 0:
+            raise ValueError("Time account exceeds a day")
+
+    def _build(self):
+        if self._isEmpty():
             return "{}"
 
         self._calculateStartTime()
         self._calculateOfficeHours(self._processWorkingHours)
         self._calculateOfficeHours(self._processRestingHours)
         self._calculateEndTime()
+        self._calculateTotalTime()
 
-        return json.dumps(self._build())
-
-    def _build(self):
-        total = self._end-self._start
-        if(total.days > 0):
-            raise ValueError("Time account exceeds a day")
-        return {
+    def report(self):
+        return "{}" if self._isEmpty() else json.dumps({
             'start': _dayHoursToStr(self._start),
             'end': _dayHoursToStr(self._end),
-            'total': _deltaToStr(total),
+            'total': _deltaToStr(self._total),
             'working': _deltaToStr(self._working),
             'resting': _deltaToStr(self._resting)
-        }
+        })
+
 
 if __name__ == "__main__":
     with open(sys.argv[1], "r") as infile:
