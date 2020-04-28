@@ -124,13 +124,23 @@ class TestLogAnalyzer(unittest.TestCase):
     @mock.patch('officehours.logAnalyzer._now', side_effect=defaultEnd)
     def test_checkCurrentDay(self, now_function):
         logs = LogBuilder().start().build()
-        report = report = ReportBuilder().working("09:30").resting("00:00").build()
+        report = ReportBuilder().working("09:30").resting("00:00").build()
         self.assertEqual(logAnalyzer.Report(logs).report(), report)
     
     @mock.patch('officehours.logAnalyzer._now', side_effect=defaultEnd)
     def test_checkCurrentDayWithPause(self, now_function):
         logs = LogBuilder().start().pause("13:00", "14:00").build()
-        report = report = ReportBuilder().build()
+        report = ReportBuilder().build()
+        self.assertEqual(logAnalyzer.Report(logs).report(), report)
+
+    def test_report_restingLessThanAMinute(self):
+        logs = LogBuilder().start().pause("13:00", "13:00").end().build()
+        report = ReportBuilder().working("09:30").resting("00:00").build()
+        self.assertEqual(logAnalyzer.Report(logs).report(), report)
+
+    def test_report_workingLessThanAMinute(self):
+        logs = LogBuilder().start().pause("13:00", "13:30").pause("13:30", "14:00").end().build()
+        report = ReportBuilder().build()
         self.assertEqual(logAnalyzer.Report(logs).report(), report)
 
 if __name__ == '__main__':
