@@ -87,15 +87,14 @@ class Report:
             processor(tp, newTP)
             tp = newTP
 
+    def _adjustEndTimeWhenItsNotFound(self):
+        tpf = Report._now()
+        delta = tpf - self.__timepoints[-1].getTime()
+        self.__working += delta
+        return tpf
+
     def _calculateEndTime(self):
-        if self.__timepoints[-1].isUnlock():
-            #fake timepoint
-            tpf = Report._now()
-            delta = tpf - self.__timepoints[-1].getTime()
-            self.__working += delta
-            self.__end = tpf
-        else:
-            self.__end = self.__timepoints[-1].getTime()
+        self.__end = self.__timepoints[-1].getTime() if self.__timepoints[-1].isLock() else self._adjustEndTimeWhenItsNotFound()
 
     def _calculateTotalTime(self):
         self.__total = self.__end - self.__start
