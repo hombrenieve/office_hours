@@ -28,8 +28,8 @@ class SessionLockLogger(dbus.service.Object):
             exit(0)
         bus_name = dbus.service.BusName(BUS_NAME_SERVICE, bus=self.session_bus)
         dbus.service.Object.__init__(self, bus_name, OPATH_SERVICE)
-        self.session_bus.add_signal_receiver(self.stopDbus, "Stop")
-        self.session_bus.add_signal_receiver(self.handler, dbus_interface=IFACE_SCREENSAVER, message_keyword='message')
+        self.sigStop = self.session_bus.add_signal_receiver(self.stopDbus, "Stop")
+        self.sigHandler = self.session_bus.add_signal_receiver(self.handler, dbus_interface=IFACE_SCREENSAVER, message_keyword='message')
         self.writeLog("Start")
 
     def writeLog(self, command):
@@ -49,6 +49,8 @@ class SessionLockLogger(dbus.service.Object):
 
     def _stop(self):
         self.writeLog("Stop")
+        self.sigHandler.remove()
+        self.sigStop.remove()
         self.loop.quit()
 
     def handler(self, status, message=None):
