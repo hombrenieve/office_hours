@@ -1,6 +1,6 @@
 import dbus
 import dbus.service
-import gobject
+import gi.repository.GLib
 from dbus.mainloop.glib import DBusGMainLoop
 from datetime import datetime
 import signal
@@ -62,7 +62,7 @@ class SessionLockLogger(dbus.service.Object):
 
 def main(args):
     DBusGMainLoop(set_as_default=True)
-    loop = gobject.MainLoop()
+    loop = gi.repository.GLib.MainLoop()
     sessionLogger = SessionLockLogger(loop, args.outfile)
     loop.run()
 
