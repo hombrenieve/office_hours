@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Details of session</title>
+  </head>
+  <body>
+    <p>Session by {{ session.user }}</p>
+    <p>Started at {{ session.start }}</p>
+    <p>Total time: {{ session.total }}</p>
+    <p>Logs: {{ session.log_set.count }}</p>
+    <ul>
+    {% for log in session.log_set.all %}
+        <li>Start: {{ log.start }} 
+            {% if log.end %}
+            - {{ log.end }}
+            {% else %}
+            - <i>opened</i>
+            {% endif %}
+        </li>
+    {% endfor %}
+    </ul>
+  </body>
+</html>

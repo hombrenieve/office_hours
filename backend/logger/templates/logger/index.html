@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Index of logger app</title>
+  </head>
+  <body>
+    {% if opened_sessions_list %}
+    <h1>Opened sessions</h1>
+    <ul>
+    {% for session in opened_sessions_list %}
+        <li><a href="{% url 'logger:detail' session.id %}">Session by {{ session.user }}, started at {{ session.start }}</a></li>
+    {% endfor %}
+    </ul>
+    {% else %}
+        <p>No sessions are running.</p>
+    {% endif %}
+  </body>
+</html>
