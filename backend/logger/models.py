@@ -14,9 +14,6 @@ class Session(models.Model):
     @property
     def total(self):
         return deltaToStr(self.end - self.start if (self.end != None) else timezone.now() - self.start)
-    
-    
-
 
 class Log(models.Model):
     session = models.ForeignKey(Session, on_delete=models.CASCADE)

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>History of logger app</title>
+  </head>
+  <body>
+    {% if closed_sessions_list %}
+    <h1>Closed sessions</h1>
+    <ul>
+    {% for session in closed_sessions_list %}
+        <li><a href="{% url 'logger:detail' session.id %}">Session by {{ session.user }}, started at {{ session.start }}, total time: {{ session.total }}</a></li>
+    {% endfor %}
+    </ul>
+    {% else %}
+        <p>No sessions in history.</p>
+    {% endif %}
+  </body>
+</html>
