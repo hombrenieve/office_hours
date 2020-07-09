@@ -10,7 +10,7 @@
     {% if session.end %}
     <p>Ended at {{ session.end }}</p>
     {% endif %}
-    <p>Total time: {{ session.total }}</p>
+    <p>Summary: {{ session }}</p>
     <p>Logs: {{ session.log_set.count }}</p>
     <ul>
     {% for log in session.log_set.all %}
