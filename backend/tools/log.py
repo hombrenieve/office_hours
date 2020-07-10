@@ -11,13 +11,70 @@ os.chdir(BASE_DIR)
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 
+import click
 from logger.models import Session,Log
+from datetime import datetime
+from django.utils import timezone
 
-def start_main_function(): 
+formats='%Y/%m/%d-%H:%M'
+
+def make_aware(dtime):
+    return timezone.make_aware(dtime,timezone.get_default_timezone())
+
+@click.group()
+def log():
+    pass
+
+@log.command()
+@click.option('-u', '--user', required=True)
+@click.option('--time', type=click.DateTime(formats=[formats,]), default=datetime.now().strftime(formats))
+def start(user, time):
+    session = Session(user=user, start=make_aware(time))
+    session.save()
+    log = session.log_set.create(start=make_aware(time))
+    log.save()
+    click.echo("Session %d by %s started at %s" % (session.id, user, time))
+
+@log.command()
+@click.option('-u', '--user', required=True)
+@click.option('--time', type=click.DateTime(formats=[formats,]), default=datetime.now().strftime(formats))
+def lock(user, time):
+    log = Session.objects.filter(end__isnull=True).get(user=user).log_set.get(end__isnull=True)
+    log.end = make_aware(time)
+    log.save()
+    click.echo("Session %d by %s locked at %s" % (log.session.id, user, time))
+
+@log.command()
+@click.option('-u', '--user', required=True)
+@click.option('--time', type=click.DateTime(formats=[formats,]), default=datetime.now().strftime(formats))
+def unlock(user, time):
+    log = Session.objects.filter(end__isnull=True).get(user=user).log_set.create(start=make_aware(time))
+    log.save()
+    click.echo("Session %d by %s unlocked at %s" % (log.session.id, user, time))
+    
+
+@log.command()
+@click.option('-u', '--user', required=True)
+@click.option('--time', type=click.DateTime(formats=[formats,]), default=datetime.now().strftime(formats))
+def stop(user, time):
+    log = Session.objects.filter(end__isnull=True).get(user=user).log_set.get(end__isnull=True)
+    log.end = make_aware(time)
+    log.save()
+    session = log.session
+    session.end = make_aware(time)
+    session.save()
+    click.echo("Session %d by %s stopped at %s" % (session.id, user, time))
+
+@log.command()
+def opened():
     opened_sessions_list = Session.objects.filter(end__isnull=True)
-    print("Opened sessions: ")
+    click.echo("Opened sessions: ")
     for s in opened_sessions_list:
-        print(s)
+        click.echo(s)
+
+
+def main(): 
+    log()
 
 if __name__ == '__main__':
-    start_main_function()
+    main()
