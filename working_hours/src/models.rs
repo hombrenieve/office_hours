@@ -81,21 +81,20 @@ pub mod session {
                 }
             })
         }
-    }
 
-    impl Report {
-        pub fn new(session: &Session) -> Report {
-            let total = session.get_total();
-            let working = session.get_working();
+        pub fn get_report(&self) -> Report {
+            let total = self.get_total();
+            let working = self.get_working();
             Report{
-                start: Some(session.start),
-                end: session.end,
+                start: Some(self.start),
+                end: self.end,
                 total: total,
                 working: working,
                 resting: total-working
             }
         }
     }
+
 }
 
 #[cfg(test)]
@@ -105,141 +104,154 @@ mod tests {
     type Moment = DateTime<Local>;
     use session::*;
 
-    fn calc_duration_since_epoch(minutes: u32) -> (Moment, Moment, Duration) {
-        calc_duration(Local.timestamp(0,0), minutes)
-    }
-
-    fn calc_duration(origin: Moment, minutes: u32) -> (Moment, Moment, Duration) {
-        let duration = Duration::seconds((minutes*60) as i64);
-        (origin, origin+duration, duration)
+    fn from_hour(hour: u32, minute: u32) -> Moment {
+        Local.ymd(2017, 1, 17).and_hms(hour,minute, 0)
     }
 
     struct TestBuilder {
         start: Moment,
-        end: Moment,
-        intervals: Vec<(Moment, Moment)>
+        end: Option<Moment>,
+        intervals: Vec<Event>,
+        working: Duration,
+        resting: Duration
+    }
+
+    impl Default for TestBuilder {
+        fn default() -> Self {
+            TestBuilder{
+                start: Local.timestamp(0,0),
+                end: None,
+                intervals: vec![],
+                working: Duration::zero(),
+                resting: Duration::zero()
+            }
+        }
+    }
+
+    impl TestBuilder {
+
+
+
+        fn build_expected(&self) -> Report {
+            Report {
+                start: Some(self.start),
+                end: self.end,
+                total: self.end.unwrap().signed_duration_since(self.start),
+                working: self.working,
+                resting: self.resting
+            }
+        }
+
+        fn run_test(&mut self) {
+            let mut sess = Session::new(self.start);
+            for int in self.intervals.drain(..) {
+                sess.event(int);
+            }
+            assert_eq!(self.build_expected(), sess.get_report());
+        }
+
     }
 
     #[test]
     fn session_no_pause() {
-        let (origin, end, duration) = calc_duration_since_epoch(60*8);
-        let mut sess = Session::new(origin);
-        sess.event(Event::Close(end));
-        let expected = Report {
-            start: Some(origin),
-            end: Some(end),
-            total: duration,
-            working: duration,
-            resting: Duration::zero()
+        let mut builder = TestBuilder{
+            start: from_hour(8,0),
+            end: Some(from_hour(16,0)),
+            intervals: vec![Event::Close(from_hour(16,0))],
+            working: Duration::hours(8),
+            ..TestBuilder::default()
         };
-        assert_eq!(Report::new(&sess), expected);
+        builder.run_test();
     }
 
     #[test]
     fn session_one_pause() {
-        let (start, end, duration) = calc_duration_since_epoch(60*8);
-        let (first_pause, end_first_pause, duration_pause) =
-        calc_duration(start+Duration::seconds(3600), 60*2);
-        let mut sess = Session::new(start);
-        sess.event(Event::Lock(first_pause));
-        sess.event(Event::Unlock(end_first_pause));
-        sess.event(Event::Close(end));
-        let expected = Report {
-            start: Some(start),
-            end: Some(end),
-            total: duration,
-            working: duration-duration_pause,
-            resting: duration_pause
+        let mut builder = TestBuilder{
+            start: from_hour(8,0),
+            end: Some(from_hour(16,0)),
+            intervals: vec![
+                Event::Lock(from_hour(13,0)),
+                Event::Unlock(from_hour(14,0)),
+                Event::Close(from_hour(16,0))
+            ],
+            working: Duration::hours(7),
+            resting: Duration::hours(1)
         };
-        assert_eq!(Report::new(&sess), expected);
+        builder.run_test();
     }
 
     #[test]
     fn session_two_pauses() {
-        let (start, end, duration) = calc_duration_since_epoch(60*8);
-        let (first_pause, end_first_pause, duration_pause) =
-            calc_duration(start+Duration::seconds(3600), 60*2);
-        let (second_pause, end_second_pause, duration_second_pause) =
-            calc_duration(start+Duration::seconds(3600*4), 60);
-        let mut sess = Session::new(start);
-        sess.event(Event::Lock(first_pause));
-        sess.event(Event::Unlock(end_first_pause));
-        sess.event(Event::Lock(second_pause));
-        sess.event(Event::Unlock(end_second_pause));
-        sess.event(Event::Close(end));
-        let expected = Report {
-            start: Some(start),
-            end: Some(end),
-            total: duration,
-            working: duration-duration_pause-duration_second_pause,
-            resting: duration_pause+duration_second_pause
+        let mut builder = TestBuilder{
+            start: from_hour(8,0),
+            end: Some(from_hour(16,0)),
+            intervals: vec![
+                Event::Lock(from_hour(8,30)),
+                Event::Unlock(from_hour(9,0)),
+                Event::Lock(from_hour(13,0)),
+                Event::Unlock(from_hour(14,0)),
+                Event::Close(from_hour(16,0))
+            ],
+            working: Duration::minutes(6*60+30),
+            resting: Duration::minutes(60+30)
         };
-        assert_eq!(Report::new(&sess), expected);
+        builder.run_test();
     }
 
     #[test]
     fn session_one_pause_several_locks() {
-        let (start, end, duration) = calc_duration_since_epoch(60*8);
-        let (first_pause, end_first_pause, duration_pause) =
-            calc_duration(start+Duration::seconds(3600), 60*2);
-        let mut sess = Session::new(start);
-        sess.event(Event::Lock(first_pause));
-        sess.event(Event::Lock(first_pause+Duration::seconds(10)));
-        sess.event(Event::Lock(first_pause+Duration::seconds(100)));
-        sess.event(Event::Unlock(end_first_pause));
-        sess.event(Event::Close(end));
-        let expected = Report {
-            start: Some(start),
-            end: Some(end),
-            total: duration,
-            working: duration-duration_pause,
-            resting: duration_pause
+        let mut builder = TestBuilder{
+            start: from_hour(8,0),
+            end: Some(from_hour(16,0)),
+            intervals: vec![
+                Event::Lock(from_hour(13,0)),
+                Event::Lock(from_hour(13,10)),
+                Event::Lock(from_hour(13,30)),
+                Event::Unlock(from_hour(14,0)),
+                Event::Close(from_hour(16,0))
+            ],
+            working: Duration::hours(7),
+            resting: Duration::hours(1)
         };
-        assert_eq!(Report::new(&sess), expected);
+        builder.run_test();
     }
 
     #[test]
     fn session_one_pause_several_unlocks() {
-        let (start, end, duration) = calc_duration_since_epoch(60*8);
-        let (first_pause, end_first_pause, duration_pause) =
-            calc_duration(start+Duration::seconds(3600), 60*2);
-        let mut sess = Session::new(start);
-        sess.event(Event::Lock(first_pause));
-        sess.event(Event::Unlock(end_first_pause));
-        sess.event(Event::Unlock(end_first_pause+Duration::seconds(10)));
-        sess.event(Event::Unlock(end_first_pause+Duration::seconds(100)));
-        sess.event(Event::Close(end));
-        let expected = Report {
-            start: Some(start),
-            end: Some(end),
-            total: duration,
-            working: duration-duration_pause,
-            resting: duration_pause
+        let mut builder = TestBuilder{
+            start: from_hour(8,0),
+            end: Some(from_hour(16,0)),
+            intervals: vec![
+                Event::Lock(from_hour(13,0)),
+                Event::Unlock(from_hour(14,0)),
+                Event::Unlock(from_hour(14,10)),
+                Event::Unlock(from_hour(14,30)),
+                Event::Close(from_hour(16,0))
+            ],
+            working: Duration::hours(7),
+            resting: Duration::hours(1)
         };
-        assert_eq!(Report::new(&sess), expected);
+        builder.run_test();
     }
 
     #[test]
     fn session_one_pause_several_lock_unlock_same_time() {
-        let (start, end, duration) = calc_duration_since_epoch(60*8);
-        let (first_pause, end_first_pause, duration_pause) =
-            calc_duration(start+Duration::seconds(3600), 60*2);
-        let mut sess = Session::new(start);
-        sess.event(Event::Lock(first_pause));
-        sess.event(Event::Unlock(first_pause));
-        sess.event(Event::Lock(first_pause));
-        sess.event(Event::Unlock(first_pause));
-        sess.event(Event::Lock(first_pause));
-        sess.event(Event::Unlock(end_first_pause));
-        sess.event(Event::Close(end));
-        let expected = Report {
-            start: Some(start),
-            end: Some(end),
-            total: duration,
-            working: duration-duration_pause,
-            resting: duration_pause
+        let mut builder = TestBuilder{
+            start: from_hour(8,0),
+            end: Some(from_hour(16,0)),
+            intervals: vec![
+                Event::Lock(from_hour(13,0)),
+                Event::Unlock(from_hour(13,0)),
+                Event::Lock(from_hour(13,0)),
+                Event::Unlock(from_hour(13,0)),
+                Event::Lock(from_hour(13,0)),
+                Event::Unlock(from_hour(14,0)),
+                Event::Close(from_hour(16,0))
+            ],
+            working: Duration::hours(7),
+            resting: Duration::hours(1)
         };
-        assert_eq!(Report::new(&sess), expected);
+        builder.run_test();
     }
 
 }
