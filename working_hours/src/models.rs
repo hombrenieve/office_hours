@@ -1,6 +1,6 @@
 pub mod session {
-    use std::time::{SystemTime, Duration};
-    type Moment = SystemTime;
+    use chrono::{Local, DateTime, Duration, TimeZone};
+    type Moment = DateTime<Local>;
 
     #[derive(Debug)]
     pub struct Session {
@@ -58,24 +58,24 @@ pub mod session {
 
         fn get_total(&self) -> Duration {
             match self.events.last() {
-                Some(Event::Create(_)) => Duration::from_secs(0),
+                Some(Event::Create(_)) => Duration::zero(),
                 Some(event) => match event {
                     Event::Close(moment) | Event::Lock(moment) | Event::Unlock(moment) =>
-                        moment.duration_since(self.start).unwrap(),
-                    _ => Duration::from_secs(0)
+                        moment.signed_duration_since(self.start),
+                    _ => Duration::zero()
                 },
-                _ => Duration::from_secs(0)
+                _ => Duration::zero()
             }
         }
 
         fn get_working(&self) -> Duration {
-            let mut previous: &SystemTime = &SystemTime::UNIX_EPOCH;
-            self.events.iter().fold(Duration::from_secs(0), | acc, event | {
+            let mut previous: Moment = Local.timestamp(0,0);
+            self.events.iter().fold(Duration::zero(), | acc, event | {
                 match event {
                     Event::Lock(moment) | Event::Close(moment) =>
-                        acc+moment.duration_since(*previous).unwrap(),
+                        acc+moment.signed_duration_since(previous),
                     Event::Unlock(moment) | Event::Create(moment )=> {
-                        previous = moment;
+                        previous = *moment;
                         acc
                     }
                 }
@@ -101,16 +101,23 @@ pub mod session {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, Duration};
+    use chrono::{Local, DateTime, Duration, TimeZone};
+    type Moment = DateTime<Local>;
     use session::*;
 
-    fn calc_duration_since_epoch(minutes: u32) -> (SystemTime, SystemTime, Duration) {
-        calc_duration(SystemTime::UNIX_EPOCH, minutes)
+    fn calc_duration_since_epoch(minutes: u32) -> (Moment, Moment, Duration) {
+        calc_duration(Local.timestamp(0,0), minutes)
     }
 
-    fn calc_duration(origin: SystemTime, minutes: u32) -> (SystemTime, SystemTime, Duration) {
-        let duration = Duration::from_secs((minutes*60) as u64);
+    fn calc_duration(origin: Moment, minutes: u32) -> (Moment, Moment, Duration) {
+        let duration = Duration::seconds((minutes*60) as i64);
         (origin, origin+duration, duration)
+    }
+
+    struct TestBuilder {
+        start: Moment,
+        end: Moment,
+        intervals: Vec<(Moment, Moment)>
     }
 
     #[test]
@@ -123,7 +130,7 @@ mod tests {
             end: Some(end),
             total: duration,
             working: duration,
-            resting: Duration::from_secs(0)
+            resting: Duration::zero()
         };
         assert_eq!(Report::new(&sess), expected);
     }
@@ -132,7 +139,7 @@ mod tests {
     fn session_one_pause() {
         let (start, end, duration) = calc_duration_since_epoch(60*8);
         let (first_pause, end_first_pause, duration_pause) =
-        calc_duration(start+Duration::from_secs(3600), 60*2);
+        calc_duration(start+Duration::seconds(3600), 60*2);
         let mut sess = Session::new(start);
         sess.event(Event::Lock(first_pause));
         sess.event(Event::Unlock(end_first_pause));
@@ -151,9 +158,9 @@ mod tests {
     fn session_two_pauses() {
         let (start, end, duration) = calc_duration_since_epoch(60*8);
         let (first_pause, end_first_pause, duration_pause) =
-            calc_duration(start+Duration::from_secs(3600), 60*2);
+            calc_duration(start+Duration::seconds(3600), 60*2);
         let (second_pause, end_second_pause, duration_second_pause) =
-            calc_duration(start+Duration::from_secs(3600*4), 60);
+            calc_duration(start+Duration::seconds(3600*4), 60);
         let mut sess = Session::new(start);
         sess.event(Event::Lock(first_pause));
         sess.event(Event::Unlock(end_first_pause));
@@ -174,11 +181,11 @@ mod tests {
     fn session_one_pause_several_locks() {
         let (start, end, duration) = calc_duration_since_epoch(60*8);
         let (first_pause, end_first_pause, duration_pause) =
-            calc_duration(start+Duration::from_secs(3600), 60*2);
+            calc_duration(start+Duration::seconds(3600), 60*2);
         let mut sess = Session::new(start);
         sess.event(Event::Lock(first_pause));
-        sess.event(Event::Lock(first_pause+Duration::from_secs(10)));
-        sess.event(Event::Lock(first_pause+Duration::from_secs(100)));
+        sess.event(Event::Lock(first_pause+Duration::seconds(10)));
+        sess.event(Event::Lock(first_pause+Duration::seconds(100)));
         sess.event(Event::Unlock(end_first_pause));
         sess.event(Event::Close(end));
         let expected = Report {
@@ -195,12 +202,12 @@ mod tests {
     fn session_one_pause_several_unlocks() {
         let (start, end, duration) = calc_duration_since_epoch(60*8);
         let (first_pause, end_first_pause, duration_pause) =
-            calc_duration(start+Duration::from_secs(3600), 60*2);
+            calc_duration(start+Duration::seconds(3600), 60*2);
         let mut sess = Session::new(start);
         sess.event(Event::Lock(first_pause));
         sess.event(Event::Unlock(end_first_pause));
-        sess.event(Event::Unlock(end_first_pause+Duration::from_secs(10)));
-        sess.event(Event::Unlock(end_first_pause+Duration::from_secs(100)));
+        sess.event(Event::Unlock(end_first_pause+Duration::seconds(10)));
+        sess.event(Event::Unlock(end_first_pause+Duration::seconds(100)));
         sess.event(Event::Close(end));
         let expected = Report {
             start: Some(start),
@@ -216,7 +223,7 @@ mod tests {
     fn session_one_pause_several_lock_unlock_same_time() {
         let (start, end, duration) = calc_duration_since_epoch(60*8);
         let (first_pause, end_first_pause, duration_pause) =
-            calc_duration(start+Duration::from_secs(3600), 60*2);
+            calc_duration(start+Duration::seconds(3600), 60*2);
         let mut sess = Session::new(start);
         sess.event(Event::Lock(first_pause));
         sess.event(Event::Unlock(first_pause));
