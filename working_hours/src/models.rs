@@ -1,6 +1,11 @@
+use chrono::{Local, DateTime, Duration, TimeZone};
+
 pub mod session {
-    use chrono::{Local, DateTime, Duration, TimeZone};
-    type Moment = DateTime<Local>;
+    use super::*;
+    type Moment = chrono::DateTime<chrono::Local>;
+    #[cfg(test)]
+    use mock_time::now;
+
 
     #[derive(Debug)]
     pub struct Session {
@@ -57,20 +62,12 @@ pub mod session {
         }
 
         fn get_total(&self) -> Duration {
-            match self.events.last() {
-                Some(Event::Create(_)) => Duration::zero(),
-                Some(event) => match event {
-                    Event::Close(moment) | Event::Lock(moment) | Event::Unlock(moment) =>
-                        moment.signed_duration_since(self.start),
-                    _ => Duration::zero()
-                },
-                _ => Duration::zero()
-            }
+            self.end.unwrap_or_else(now).signed_duration_since(self.start)
         }
 
         fn get_working(&self) -> Duration {
             let mut previous: Moment = Local.timestamp(0,0);
-            self.events.iter().fold(Duration::zero(), | acc, event | {
+            let mut working = self.events.iter().fold(Duration::zero(), | acc, event | {
                 match event {
                     Event::Lock(moment) | Event::Close(moment) =>
                         acc+moment.signed_duration_since(previous),
@@ -79,7 +76,11 @@ pub mod session {
                         acc
                     }
                 }
-            })
+            });
+            if self.end == None {
+                working = working + now().signed_duration_since(previous);
+            }
+            working
         }
 
         pub fn get_report(&self) -> Report {
@@ -94,23 +95,63 @@ pub mod session {
             }
         }
     }
-
 }
+
+#[cfg(not(test))]
+fn now() -> DateTime<Local> {
+    Local::now()
+}
+
+#[cfg(test)]
+pub mod mock_time {
+    use super::*;
+    use std::cell::RefCell;
+
+    thread_local! {
+        static MOCK_TIME: RefCell<Option<DateTime<Local>>> = RefCell::new(None);
+    }
+
+    pub fn now() -> DateTime<Local> {
+        MOCK_TIME.with(|cell| {
+            cell.borrow()
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(Local::now)
+        })
+    }
+
+    pub fn set_mock_time(time: DateTime<Local>) {
+        MOCK_TIME.with(|cell| *cell.borrow_mut() = Some(time));
+    }
+
+    pub fn clear_mock_time() {
+        MOCK_TIME.with(|cell| *cell.borrow_mut() = None);
+    }
+}
+
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{Local, DateTime, Duration, TimeZone};
-    type Moment = DateTime<Local>;
+    type DTime = DateTime<Local>;
     use session::*;
 
-    fn from_hour(hour: u32, minute: u32) -> Moment {
+    fn from_hour(hour: u32, minute: u32) -> DTime {
         Local.ymd(2017, 1, 17).and_hms(hour,minute, 0)
     }
 
+    fn from_hour_next_day(hour: u32, minute: u32) -> DTime {
+        Local.ymd(2017, 1, 18).and_hms(hour,minute, 0)
+    }
+
+    fn set_system_time(hour: u32, minute: u32) {
+        mock_time::set_mock_time(Local.ymd(2017, 1, 17).and_hms(hour,minute, 0));
+    }
+
     struct TestBuilder {
-        start: Moment,
-        end: Option<Moment>,
+        start: DTime,
+        end: Option<DTime>,
         intervals: Vec<Event>,
         working: Duration,
         resting: Duration
@@ -130,13 +171,12 @@ mod tests {
 
     impl TestBuilder {
 
-
-
         fn build_expected(&self) -> Report {
             Report {
                 start: Some(self.start),
                 end: self.end,
-                total: self.end.unwrap().signed_duration_since(self.start),
+                total: self.end.unwrap_or_else(mock_time::now)
+                    .signed_duration_since(self.start),
                 working: self.working,
                 resting: self.resting
             }
@@ -251,6 +291,29 @@ mod tests {
             working: Duration::hours(7),
             resting: Duration::hours(1)
         };
+        builder.run_test();
+    }
+
+    #[test]
+    fn long_session_no_pause() {
+        let mut builder = TestBuilder{
+            start: from_hour(8,0),
+            end: Some(from_hour_next_day(8,0)),
+            intervals: vec![Event::Close(from_hour_next_day(8,0))],
+            working: Duration::hours(24),
+            ..TestBuilder::default()
+        };
+        builder.run_test();
+    }
+
+    #[test]
+    fn check_current_day() {
+        let mut builder = TestBuilder{
+            start: from_hour(8,0),
+            working: Duration::hours(6),
+            ..TestBuilder::default()
+        };
+        mock_time::set_mock_time(from_hour(14, 0));
         builder.run_test();
     }
 
