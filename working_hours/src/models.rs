@@ -31,6 +31,12 @@ pub mod session {
         Close(Moment)
     }
 
+    #[derive(Eq, PartialEq)]
+    enum Status {
+        Resting,
+        Working
+    }
+
     impl Session {
 
         pub fn new(moment: Moment) -> Session {
@@ -42,23 +48,13 @@ pub mod session {
         }
 
         pub fn event(&mut self, an_event: Event) {
-            if let Some(last_event) = self.events.last() {
-                match an_event {
-                    Event::Lock(_) => match last_event {
-                        Event::Unlock(_) | Event::Create(_) => self.events.push(an_event),
-                        _ => ()
-                    },
-                    Event::Unlock(_) => match last_event {
-                        Event::Lock(_) => self.events.push(an_event),
-                        _ => ()
-                    },
-                    Event::Close(moment) => {
-                        self.events.push(an_event);
-                        self.end = Some(moment);
-                    },
-                    _ => ()
-                }
+            match an_event {
+                Event::Close(moment) => {
+                    self.end = Some(moment);
+                },
+                _ => ()
             }
+            self.events.push(an_event);
         }
 
         fn get_total(&self) -> Duration {
@@ -71,22 +67,48 @@ pub mod session {
             events
         }
 
-        fn get_working(&self) -> Duration {
-            let mut previous: Moment = Local.timestamp(0, 0);
-            let mut working = self.events.iter().fold(Duration::zero(), |acc, event| {
-                match event {
-                    Event::Lock(moment) | Event::Close(moment) =>
-                        acc + moment.signed_duration_since(previous),
-                    Event::Unlock(moment) | Event::Create(moment) => {
-                        previous = *moment;
-                        acc
+        fn calculate_deltas(events: &Vec<Event>) -> Vec<(Status, Duration)> {
+            let mut deltas: Vec<(Status, Duration)> = vec![];
+            let mut previous = events.first().unwrap();
+            for event in events.iter().skip(1) {
+                let status: Status;
+                let prev_time: &Moment;
+                match previous {
+                    Event::Create(moment)|Event::Unlock(moment) => {
+                        status = Status::Working;
+                        prev_time = moment;
+                    },
+                    Event::Close(moment)|Event::Lock(moment) => {
+                        status = Status::Resting;
+                        prev_time = moment;
                     }
                 }
-            });
-            if self.end == None {
-                working = working + now().signed_duration_since(previous);
+                match event {
+                    Event::Create(moment)|Event::Unlock(moment)|
+                    Event::Close(moment)|Event::Lock(moment) => {
+                        let duration = moment.signed_duration_since(*prev_time);
+                        deltas.push((status, duration));
+                        previous = event;
+                    }
+                }
             }
-            working
+            deltas
+        }
+
+        fn calculate_office_hours(&self) -> (Duration, Duration) {
+            let deltas: Vec<(Status, Duration)>;
+            if self.end == None {
+                deltas = Self::calculate_deltas(&self.fake_close());
+            } else {
+                deltas = Self::calculate_deltas(&self.events);
+            }
+            let resting = deltas.iter().filter(|e| e.0 == Status::Resting)
+                .map(|e| e.1)
+                .fold(Duration::zero(), |acc, e| acc+e);
+            let working = deltas.iter().filter(|e| e.0 == Status::Working)
+                .map(|e| e.1)
+                .fold(Duration::zero(), |acc, e| acc+e);
+            (working, resting)
         }
 
         pub fn is_session_running(&self) -> bool {
@@ -95,13 +117,13 @@ pub mod session {
 
         pub fn get_report(&self) -> Report {
             let total = self.get_total();
-            let working = self.get_working();
+            let (working, resting) = self.calculate_office_hours();
             Report{
                 start: Some(self.start),
                 end: self.end,
                 total: total,
                 working: working,
-                resting: total-working
+                resting: resting
             }
         }
     }
