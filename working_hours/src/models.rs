@@ -11,7 +11,7 @@ pub mod session {
     pub struct Session {
         start: Moment,
         end: Option<Moment>,
-        events: Vec<Event>
+        events: Vec<Event>,
     }
 
     #[derive(Eq, PartialEq, Debug)]
@@ -23,7 +23,7 @@ pub mod session {
         pub resting: Duration
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub enum Event {
         Create(Moment),
         Lock(Moment),
@@ -65,13 +65,19 @@ pub mod session {
             self.end.unwrap_or_else(now).signed_duration_since(self.start)
         }
 
+        fn fake_close(&self) -> Vec<Event> {
+            let mut events = self.events.to_vec();
+            events.push(Event::Close(now()));
+            events
+        }
+
         fn get_working(&self) -> Duration {
-            let mut previous: Moment = Local.timestamp(0,0);
-            let mut working = self.events.iter().fold(Duration::zero(), | acc, event | {
+            let mut previous: Moment = Local.timestamp(0, 0);
+            let mut working = self.events.iter().fold(Duration::zero(), |acc, event| {
                 match event {
                     Event::Lock(moment) | Event::Close(moment) =>
-                        acc+moment.signed_duration_since(previous),
-                    Event::Unlock(moment) | Event::Create(moment )=> {
+                        acc + moment.signed_duration_since(previous),
+                    Event::Unlock(moment) | Event::Create(moment) => {
                         previous = *moment;
                         acc
                     }
@@ -81,6 +87,10 @@ pub mod session {
                 working = working + now().signed_duration_since(previous);
             }
             working
+        }
+
+        pub fn is_session_running(&self) -> bool {
+            self.end == None
         }
 
         pub fn get_report(&self) -> Report {
@@ -317,4 +327,36 @@ mod tests {
         builder.run_test();
     }
 
+    #[test]
+    fn check_current_day_one_pause() {
+        let mut builder = TestBuilder{
+            start: from_hour(8,0),
+            intervals: vec![
+                Event::Lock(from_hour(13,0)),
+                Event::Unlock(from_hour(14,0))
+            ],
+            working: Duration::hours(6),
+            resting: Duration::hours(1),
+
+            ..TestBuilder::default()
+        };
+        mock_time::set_mock_time(from_hour(15, 0));
+        builder.run_test();
+    }
+
+    #[test]
+    fn check_current_day_unfinished_pause() {
+        let mut builder = TestBuilder{
+            start: from_hour(8,0),
+            intervals: vec![
+                Event::Lock(from_hour(13,0))
+            ],
+            working: Duration::hours(5),
+            resting: Duration::hours(2),
+
+            ..TestBuilder::default()
+        };
+        mock_time::set_mock_time(from_hour(15, 0));
+        builder.run_test();
+    }
 }
