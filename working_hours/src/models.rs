@@ -31,6 +31,30 @@ pub mod session {
         Close(Moment)
     }
 
+    impl Event {
+        fn delta_from(&self, other: &Event) -> (Status, Duration) {
+            let status: Status;
+            let other_time: &Moment;
+            match other {
+                Event::Create(moment) | Event::Unlock(moment) => {
+                    status = Status::Working;
+                    other_time = moment;
+                }
+                Event::Close(moment) | Event::Lock(moment) => {
+                    status = Status::Resting;
+                    other_time = moment;
+                }
+            };
+            match self {
+                Event::Create(moment) | Event::Unlock(moment) |
+                Event::Close(moment) | Event::Lock(moment) => {
+                    let duration = moment.signed_duration_since(*other_time);
+                    (status, duration)
+                }
+            }
+        }
+    }
+
     #[derive(Eq, PartialEq)]
     enum Status {
         Resting,
@@ -71,26 +95,8 @@ pub mod session {
             let mut deltas: Vec<(Status, Duration)> = vec![];
             let mut previous = events.first().unwrap();
             for event in events.iter().skip(1) {
-                let status: Status;
-                let prev_time: &Moment;
-                match previous {
-                    Event::Create(moment)|Event::Unlock(moment) => {
-                        status = Status::Working;
-                        prev_time = moment;
-                    },
-                    Event::Close(moment)|Event::Lock(moment) => {
-                        status = Status::Resting;
-                        prev_time = moment;
-                    }
-                }
-                match event {
-                    Event::Create(moment)|Event::Unlock(moment)|
-                    Event::Close(moment)|Event::Lock(moment) => {
-                        let duration = moment.signed_duration_since(*prev_time);
-                        deltas.push((status, duration));
-                        previous = event;
-                    }
-                }
+                deltas.push(event.delta_from(previous));
+                previous = event;
             }
             deltas
         }
