@@ -33,23 +33,19 @@ pub mod session {
 
     impl Event {
         fn delta_from(&self, other: &Event) -> (Status, Duration) {
-            let status: Status;
-            let other_time: &Moment;
-            match other {
-                Event::Create(moment) | Event::Unlock(moment) => {
-                    status = Status::Working;
-                    other_time = moment;
-                }
-                Event::Close(moment) | Event::Lock(moment) => {
-                    status = Status::Resting;
-                    other_time = moment;
-                }
+            let status = match other {
+                Event::Create(_) | Event::Unlock(_) => Status::Working,
+                Event::Close(_) | Event::Lock(_) => Status::Resting
             };
+            let duration = self.get_moment().signed_duration_since(*other.get_moment());
+            (status, duration)
+        }
+
+        fn get_moment(&self) -> &Moment {
             match self {
                 Event::Create(moment) | Event::Unlock(moment) |
                 Event::Close(moment) | Event::Lock(moment) => {
-                    let duration = moment.signed_duration_since(*other_time);
-                    (status, duration)
+                    moment
                 }
             }
         }
