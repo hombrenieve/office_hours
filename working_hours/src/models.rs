@@ -179,10 +179,6 @@ mod tests {
         Local.ymd(2017, 1, 18).and_hms(hour,minute, 0)
     }
 
-    fn set_system_time(hour: u32, minute: u32) {
-        mock_time::set_mock_time(Local.ymd(2017, 1, 17).and_hms(hour,minute, 0));
-    }
-
     struct TestBuilder {
         start: DTime,
         end: Option<DTime>,
