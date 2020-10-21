@@ -5,6 +5,8 @@ pub mod session {
     type Moment = chrono::DateTime<chrono::Local>;
     #[cfg(test)]
     use mock_time::now;
+    use serde::{Serialize, Serializer};
+    use serde::ser::SerializeStruct;
 
 
     #[derive(Debug)]
@@ -21,6 +23,33 @@ pub mod session {
         pub total: Duration,
         pub working: Duration,
         pub resting: Duration
+    }
+
+    impl Report {
+        fn duration_to_str(dur: Duration) -> String {
+            let hours = dur.num_hours();
+            let minutes = dur.num_minutes()-hours*60;
+            format!("{}:{}", hours, minutes)
+        }
+    }
+
+    impl Serialize for Report {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        {
+            let mut state = serializer.serialize_struct("Report", 5)?;
+            state.serialize_field("start", &self.start.unwrap().to_rfc3339())?;
+            if let Some(end) = self.end {
+                state.serialize_field("end", &end.to_rfc3339())?;
+            } else {
+                state.skip_field("end")?;
+            }
+            state.serialize_field("total", &Report::duration_to_str(self.total))?;
+            state.serialize_field("working", &Report::duration_to_str(self.working))?;
+            state.serialize_field("resting", &Report::duration_to_str(self.resting))?;
+            state.end()
+        }
     }
 
     #[derive(Debug, Clone)]

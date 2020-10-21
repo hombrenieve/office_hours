@@ -57,6 +57,17 @@ fn get_sessions(session_state: State<SessionState>) -> JsonValue {
     })
 }
 
+#[get("/sessions/<id>/report")]
+fn get_session_report(id: ID, session_state: State<SessionState>) -> Option<Json<Report>> {
+    if let Some(session) = session_state.sessions.lock().unwrap().get(&id) {
+        Some(Json(session.get_report()))
+    } else {
+        None
+    }
+}
+
+
+
 #[derive(Deserialize)]
 struct SessionMessage {
     start: String
@@ -101,7 +112,7 @@ fn not_found() -> JsonValue {
 fn rocket(state: SessionState) -> rocket::Rocket {
     rocket::ignite()
         .manage(state)
-        .mount("/", routes![get_sessions, new_session, delete_session])
+        .mount("/", routes![get_sessions, new_session, get_session_report, delete_session])
         .register(catchers![not_found])
 }
 
@@ -111,7 +122,8 @@ fn main() {
 
 //#########################################################################
 
-#[cfg(test)]
+#[cfg(test)] #[macro_use]
+extern crate assert_matches;
 mod test {
     use super::rocket;
     use super::*;
@@ -172,6 +184,26 @@ mod test {
     fn test_delete_session_not_found() {
         let client = Client::new(rocket(SessionState::new(SessionMap::new()))).expect("valid rocket instance");
         let mut response = client.delete("/sessions/3").dispatch();
+        assert_eq!(response.status(), Status::NotFound);
+        assert_eq!(response.body_string(), Some(r#"{"reason":"Resource was not found","status":"error"}"#.into()));
+    }
+
+    #[test]
+    fn test_get_session_report_existing_session() {
+        let session_state = SessionState::new(SessionMap::new());
+        session_state.add_session(Session::new(chrono::Local::now()));
+        let client = Client::new(rocket(session_state)).expect("valid rocket instance");
+        let mut response = client.get("/sessions/0/report").dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        assert_matches!(response.body_string(), Some(_)); //Create regular expression
+    }
+
+    #[test]
+    fn test_get_session_report_non_existing_session() {
+        let session_state = SessionState::new(SessionMap::new());
+        session_state.add_session(Session::new(chrono::Local::now()));
+        let client = Client::new(rocket(session_state)).expect("valid rocket instance");
+        let mut response = client.get("/sessions/2/report").dispatch();
         assert_eq!(response.status(), Status::NotFound);
         assert_eq!(response.body_string(), Some(r#"{"reason":"Resource was not found","status":"error"}"#.into()));
     }
