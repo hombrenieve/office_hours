@@ -5,9 +5,13 @@ mod models;
 pub use models::session::*;
 
 #[macro_use] extern crate rocket;
+#[macro_use] extern crate rocket_contrib;
+#[macro_use] extern crate serde_derive;
 use rocket::State;
 use std::sync::{Arc, Mutex};
-use rocket::http::RawStr;
+use rocket_contrib::json::{Json, JsonValue};
+use rocket::response::status::BadRequest;
+
 
 struct SessionState {
     sessions: Arc<Mutex<Vec<Session>>>
@@ -30,21 +34,34 @@ impl SessionState {
     }
 }
 
-#[get("/sessions")]
-fn get_sessions(session_state: State<SessionState>) -> String {
-    format!("The number of sessions is {}", session_state.len())
+//################ BINDINGS ######################
 
+#[get("/sessions")]
+fn get_sessions(session_state: State<SessionState>) -> JsonValue {
+    json!({
+        "status": "ok",
+        "count": session_state.len()
+    })
 }
 
-use rocket::response::status::BadRequest;
+#[derive(Deserialize)]
+struct SessionMessage {
+    start: String
+}
 
-#[get("/sessions/new?<start>")]
-fn new_session(session_state: State<SessionState>, start: &RawStr) -> Result<String, BadRequest<String>> {
-    if let Ok(session_start) = chrono::DateTime::parse_from_rfc3339(start.as_str()) {
+#[post("/sessions", format = "json", data = "<session>")]
+fn new_session(session: Json<SessionMessage>, session_state: State<SessionState>) -> Result<JsonValue, BadRequest<JsonValue>> {
+    if let Ok(session_start) = chrono::DateTime::parse_from_rfc3339(&session.0.start) {
         session_state.add_session(Session::new(chrono::DateTime::from(session_start)));
-        Ok(format!("{{ id: {} }}", session_state.len()-1))
+        Ok(json!({
+            "status": "ok",
+            "id" : session_state.len()-1
+        }))
     } else {
-        Err(BadRequest(Some("Unknown date format".into())))
+        Err(BadRequest(Some(json!({
+            "status": "error",
+            "reason": "Unknown date format"
+        }))))
     }
 }
 
@@ -58,20 +75,21 @@ fn main() {
     rocket(SessionState::new(vec![])).launch();
 }
 
+//#########################################################################
 
 #[cfg(test)]
 mod test {
     use super::rocket;
     use super::*;
     use rocket::local::Client;
-    use rocket::http::Status;
+    use rocket::http::{Status, ContentType};
 
     #[test]
     fn test_get_sessions_no_session() {
         let client = Client::new(rocket(SessionState::new(vec![]))).expect("valid rocket instance");
         let mut response = client.get("/sessions").dispatch();
         assert_eq!(response.status(), Status::Ok);
-        assert_eq!(response.body_string(), Some("The number of sessions is 0".into()));
+        assert_eq!(response.body_string(), Some(r#"{"count":0,"status":"ok"}"#.into()));
     }
 
     #[test]
@@ -80,14 +98,28 @@ mod test {
         let client = Client::new(rocket(SessionState::new(sessions))).expect("valid rocket instance");
         let mut response = client.get("/sessions").dispatch();
         assert_eq!(response.status(), Status::Ok);
-        assert_eq!(response.body_string(), Some("The number of sessions is 1".into()));
+        assert_eq!(response.body_string(), Some(r#"{"count":1,"status":"ok"}"#.into()));
     }
 
     #[test]
-    fn test_get_sessions_new_session() {
+    fn test_post_sessions_new_session_ok() {
         let client = Client::new(rocket(SessionState::new(vec![]))).expect("valid rocket instance");
-        let mut response = client.get("/sessions/new?start=2014-05-02T20:39:57+01:00").dispatch();
+        let mut response = client.post("/sessions")
+            .header(ContentType::JSON)
+            .body(r#"{ "start": "2014-05-02T20:39:57+01:00" }"#)
+            .dispatch();
         assert_eq!(response.status(), Status::Ok);
-        assert_eq!(response.body_string(), Some("{ id: 0 }".into()));
+        assert_eq!(response.body_string(), Some(r#"{"id":0,"status":"ok"}"#.into()));
+    }
+
+    #[test]
+    fn test_post_sessions_new_session_err() {
+        let client = Client::new(rocket(SessionState::new(vec![]))).expect("valid rocket instance");
+        let mut response = client.post("/sessions")
+            .header(ContentType::JSON)
+            .body(r#"{ "start": "03:45:00 17/01/2017 CEST" }"#)
+            .dispatch();
+        assert_eq!(response.status(), Status::BadRequest);
+        assert_eq!(response.body_string(), Some(r#"{"reason":"Unknown date format","status":"error"}"#.into()));
     }
 }
