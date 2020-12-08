@@ -25,11 +25,15 @@ type session struct {
 }
 
 func (s *session) Start(t time.Time) {
-	s.events = append(s.events, event{eventStart, t})
+	if len(s.events) == 0 || s.events[len(s.events)-1].prType == eventStop {
+		s.events = append(s.events, event{eventStart, t})
+	}
 }
 
 func (s *session) Stop(t time.Time) {
-	s.events = append(s.events, event{eventStop, t})
+	if s.events[len(s.events)-1].prType == eventStart {
+		s.events = append(s.events, event{eventStop, t})
+	}
 }
 
 func (s *session) Report() (*Report, error) {

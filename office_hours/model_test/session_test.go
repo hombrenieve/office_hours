@@ -68,3 +68,41 @@ func TestSessionSeveralPauses(t *testing.T) {
 	rep, err := session.Report()
 	checkReport(t, rep, err, "9h30m", "7h55m", "1h35m")
 }
+
+func TestSessionSeveralPausesStopsAccumulated(t *testing.T) {
+	session := model.NewSession(time.Date(2017, time.January, 17, 8, 00, 0, 0, time.UTC))
+
+	session.Stop(time.Date(2017, time.January, 17, 9, 00, 0, 0, time.UTC))
+	session.Stop(time.Date(2017, time.January, 17, 9, 10, 0, 0, time.UTC))
+	session.Stop(time.Date(2017, time.January, 17, 9, 15, 0, 0, time.UTC))
+	session.Start(time.Date(2017, time.January, 17, 9, 20, 0, 0, time.UTC))
+
+	session.Stop(time.Date(2017, time.January, 17, 13, 00, 0, 0, time.UTC))
+	session.Start(time.Date(2017, time.January, 17, 14, 00, 0, 0, time.UTC))
+
+	session.Stop(time.Date(2017, time.January, 17, 16, 00, 0, 0, time.UTC))
+	session.Start(time.Date(2017, time.January, 17, 16, 15, 0, 0, time.UTC))
+
+	session.Stop(time.Date(2017, time.January, 17, 17, 30, 0, 0, time.UTC))
+	rep, err := session.Report()
+	checkReport(t, rep, err, "9h30m", "7h55m", "1h35m")
+}
+
+func TestSessionSeveralPausesStartsAccumulated(t *testing.T) {
+	session := model.NewSession(time.Date(2017, time.January, 17, 8, 00, 0, 0, time.UTC))
+
+	session.Stop(time.Date(2017, time.January, 17, 9, 00, 0, 0, time.UTC))
+	session.Start(time.Date(2017, time.January, 17, 9, 20, 0, 0, time.UTC))
+
+	session.Stop(time.Date(2017, time.January, 17, 13, 00, 0, 0, time.UTC))
+	session.Start(time.Date(2017, time.January, 17, 14, 00, 0, 0, time.UTC))
+	session.Start(time.Date(2017, time.January, 17, 14, 15, 0, 0, time.UTC))
+	session.Start(time.Date(2017, time.January, 17, 14, 30, 0, 0, time.UTC))
+
+	session.Stop(time.Date(2017, time.January, 17, 16, 00, 0, 0, time.UTC))
+	session.Start(time.Date(2017, time.January, 17, 16, 15, 0, 0, time.UTC))
+
+	session.Stop(time.Date(2017, time.January, 17, 17, 30, 0, 0, time.UTC))
+	rep, err := session.Report()
+	checkReport(t, rep, err, "9h30m", "7h55m", "1h35m")
+}
