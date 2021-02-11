@@ -1,4 +1,4 @@
-use chrono::{Date, DateTime, Duration, Local, TimeZone};
+use chrono::{DateTime, Duration, Local, TimeZone};
 
 pub mod session {
     use super::*;
@@ -69,8 +69,8 @@ pub mod session {
         }
 
         fn start(&self) -> Moment {
-            match self.events[0] {
-                Event::Create(start) => start,
+            match self.events.first() {
+                Some(Event::Create(start)) => *start,
                 _ => {
                     panic!("First element must be a start");
                 }
@@ -169,10 +169,6 @@ pub mod mock_time {
     pub fn set_mock_time(time: DateTime<Local>) {
         MOCK_TIME.with(|cell| *cell.borrow_mut() = Some(time));
     }
-
-    pub fn clear_mock_time() {
-        MOCK_TIME.with(|cell| *cell.borrow_mut() = None);
-    }
 }
 
 #[cfg(test)]
@@ -187,10 +183,6 @@ mod tests {
 
     fn from_hour_next_day(hour: u32, minute: u32) -> DTime {
         Local.ymd(2017, 1, 18).and_hms(hour, minute, 0)
-    }
-
-    fn set_system_time(hour: u32, minute: u32) {
-        mock_time::set_mock_time(Local.ymd(2017, 1, 17).and_hms(hour, minute, 0));
     }
 
     struct TestBuilder {
