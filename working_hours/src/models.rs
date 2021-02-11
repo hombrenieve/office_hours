@@ -1,16 +1,15 @@
-use chrono::{Local, DateTime, Duration, TimeZone};
+use chrono::{Date, DateTime, Duration, Local, TimeZone};
 
 pub mod session {
     use super::*;
     type Moment = chrono::DateTime<chrono::Local>;
+    type Id = chrono::Date<chrono::Local>;
     #[cfg(test)]
     use mock_time::now;
 
-
     #[derive(Debug)]
     pub struct Session {
-        start: Moment,
-        end: Option<Moment>,
+        id: Id,
         events: Vec<Event>,
     }
 
@@ -20,7 +19,7 @@ pub mod session {
         pub end: Option<Moment>,
         pub total: Duration,
         pub working: Duration,
-        pub resting: Duration
+        pub resting: Duration,
     }
 
     #[derive(Debug, Clone)]
@@ -28,14 +27,14 @@ pub mod session {
         Create(Moment),
         Lock(Moment),
         Unlock(Moment),
-        Close(Moment)
+        Close(Moment),
     }
 
     impl Event {
         fn delta_from(&self, other: &Event) -> (Status, Duration) {
             let status = match other {
                 Event::Create(_) | Event::Unlock(_) => Status::Working,
-                Event::Close(_) | Event::Lock(_) => Status::Resting
+                Event::Close(_) | Event::Lock(_) => Status::Resting,
             };
             let duration = self.get_moment().signed_duration_since(*other.get_moment());
             (status, duration)
@@ -43,10 +42,10 @@ pub mod session {
 
         fn get_moment(&self) -> &Moment {
             match self {
-                Event::Create(moment) | Event::Unlock(moment) |
-                Event::Close(moment) | Event::Lock(moment) => {
-                    moment
-                }
+                Event::Create(moment)
+                | Event::Unlock(moment)
+                | Event::Close(moment)
+                | Event::Lock(moment) => moment,
             }
         }
     }
@@ -54,31 +53,45 @@ pub mod session {
     #[derive(Eq, PartialEq)]
     enum Status {
         Resting,
-        Working
+        Working,
     }
 
     impl Session {
-
         pub fn new(moment: Moment) -> Session {
             Session {
-                start: moment,
-                end: None,
-                events: vec![Event::Create(moment)]
+                id: now().date(),
+                events: vec![Event::Create(moment)],
             }
         }
 
         pub fn event(&mut self, an_event: Event) {
-            match an_event {
-                Event::Close(moment) => {
-                    self.end = Some(moment);
-                },
-                _ => ()
+            self.events.push(an_event)
+        }
+
+        fn start(&self) -> Moment {
+            match self.events[0] {
+                Event::Create(start) => start,
+                _ => {
+                    panic!("First element must be a start");
+                }
             }
-            self.events.push(an_event);
+        }
+
+        fn end(&self) -> Option<Moment> {
+            if let Some(event) = self.events.last() {
+                match event {
+                    Event::Close(moment) => Some(*moment),
+                    _ => None,
+                }
+            } else {
+                None
+            }
         }
 
         fn get_total(&self) -> Duration {
-            self.end.unwrap_or_else(now).signed_duration_since(self.start)
+            self.end()
+                .unwrap_or_else(now)
+                .signed_duration_since(self.start())
         }
 
         fn fake_close(&self) -> Vec<Event> {
@@ -99,33 +112,37 @@ pub mod session {
 
         fn calculate_office_hours(&self) -> (Duration, Duration) {
             let deltas: Vec<(Status, Duration)>;
-            if self.end == None {
+            if self.end() == None {
                 deltas = Self::calculate_deltas(&self.fake_close());
             } else {
                 deltas = Self::calculate_deltas(&self.events);
             }
-            let resting = deltas.iter().filter(|e| e.0 == Status::Resting)
+            let resting = deltas
+                .iter()
+                .filter(|e| e.0 == Status::Resting)
                 .map(|e| e.1)
-                .fold(Duration::zero(), |acc, e| acc+e);
-            let working = deltas.iter().filter(|e| e.0 == Status::Working)
+                .fold(Duration::zero(), |acc, e| acc + e);
+            let working = deltas
+                .iter()
+                .filter(|e| e.0 == Status::Working)
                 .map(|e| e.1)
-                .fold(Duration::zero(), |acc, e| acc+e);
+                .fold(Duration::zero(), |acc, e| acc + e);
             (working, resting)
         }
 
         pub fn is_session_running(&self) -> bool {
-            self.end == None
+            self.end() == None
         }
 
         pub fn get_report(&self) -> Report {
             let total = self.get_total();
             let (working, resting) = self.calculate_office_hours();
-            Report{
-                start: Some(self.start),
-                end: self.end,
+            Report {
+                start: Some(self.start()),
+                end: self.end(),
                 total: total,
                 working: working,
-                resting: resting
+                resting: resting,
             }
         }
     }
@@ -146,12 +163,7 @@ pub mod mock_time {
     }
 
     pub fn now() -> DateTime<Local> {
-        MOCK_TIME.with(|cell| {
-            cell.borrow()
-                .as_ref()
-                .cloned()
-                .unwrap_or_else(Local::now)
-        })
+        MOCK_TIME.with(|cell| cell.borrow().as_ref().cloned().unwrap_or_else(Local::now))
     }
 
     pub fn set_mock_time(time: DateTime<Local>) {
@@ -163,8 +175,6 @@ pub mod mock_time {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,15 +182,15 @@ mod tests {
     use session::*;
 
     fn from_hour(hour: u32, minute: u32) -> DTime {
-        Local.ymd(2017, 1, 17).and_hms(hour,minute, 0)
+        Local.ymd(2017, 1, 17).and_hms(hour, minute, 0)
     }
 
     fn from_hour_next_day(hour: u32, minute: u32) -> DTime {
-        Local.ymd(2017, 1, 18).and_hms(hour,minute, 0)
+        Local.ymd(2017, 1, 18).and_hms(hour, minute, 0)
     }
 
     fn set_system_time(hour: u32, minute: u32) {
-        mock_time::set_mock_time(Local.ymd(2017, 1, 17).and_hms(hour,minute, 0));
+        mock_time::set_mock_time(Local.ymd(2017, 1, 17).and_hms(hour, minute, 0));
     }
 
     struct TestBuilder {
@@ -188,31 +198,32 @@ mod tests {
         end: Option<DTime>,
         intervals: Vec<Event>,
         working: Duration,
-        resting: Duration
+        resting: Duration,
     }
 
     impl Default for TestBuilder {
         fn default() -> Self {
-            TestBuilder{
-                start: Local.timestamp(0,0),
+            TestBuilder {
+                start: Local.timestamp(0, 0),
                 end: None,
                 intervals: vec![],
                 working: Duration::zero(),
-                resting: Duration::zero()
+                resting: Duration::zero(),
             }
         }
     }
 
     impl TestBuilder {
-
         fn build_expected(&self) -> Report {
             Report {
                 start: Some(self.start),
                 end: self.end,
-                total: self.end.unwrap_or_else(mock_time::now)
+                total: self
+                    .end
+                    .unwrap_or_else(mock_time::now)
                     .signed_duration_since(self.start),
                 working: self.working,
-                resting: self.resting
+                resting: self.resting,
             }
         }
 
@@ -223,15 +234,14 @@ mod tests {
             }
             assert_eq!(self.build_expected(), sess.get_report());
         }
-
     }
 
     #[test]
     fn session_no_pause() {
-        let mut builder = TestBuilder{
-            start: from_hour(8,0),
-            end: Some(from_hour(16,0)),
-            intervals: vec![Event::Close(from_hour(16,0))],
+        let mut builder = TestBuilder {
+            start: from_hour(8, 0),
+            end: Some(from_hour(16, 0)),
+            intervals: vec![Event::Close(from_hour(16, 0))],
             working: Duration::hours(8),
             ..TestBuilder::default()
         };
@@ -240,100 +250,100 @@ mod tests {
 
     #[test]
     fn session_one_pause() {
-        let mut builder = TestBuilder{
-            start: from_hour(8,0),
-            end: Some(from_hour(16,0)),
+        let mut builder = TestBuilder {
+            start: from_hour(8, 0),
+            end: Some(from_hour(16, 0)),
             intervals: vec![
-                Event::Lock(from_hour(13,0)),
-                Event::Unlock(from_hour(14,0)),
-                Event::Close(from_hour(16,0))
+                Event::Lock(from_hour(13, 0)),
+                Event::Unlock(from_hour(14, 0)),
+                Event::Close(from_hour(16, 0)),
             ],
             working: Duration::hours(7),
-            resting: Duration::hours(1)
+            resting: Duration::hours(1),
         };
         builder.run_test();
     }
 
     #[test]
     fn session_two_pauses() {
-        let mut builder = TestBuilder{
-            start: from_hour(8,0),
-            end: Some(from_hour(16,0)),
+        let mut builder = TestBuilder {
+            start: from_hour(8, 0),
+            end: Some(from_hour(16, 0)),
             intervals: vec![
-                Event::Lock(from_hour(8,30)),
-                Event::Unlock(from_hour(9,0)),
-                Event::Lock(from_hour(13,0)),
-                Event::Unlock(from_hour(14,0)),
-                Event::Close(from_hour(16,0))
+                Event::Lock(from_hour(8, 30)),
+                Event::Unlock(from_hour(9, 0)),
+                Event::Lock(from_hour(13, 0)),
+                Event::Unlock(from_hour(14, 0)),
+                Event::Close(from_hour(16, 0)),
             ],
-            working: Duration::minutes(6*60+30),
-            resting: Duration::minutes(60+30)
+            working: Duration::minutes(6 * 60 + 30),
+            resting: Duration::minutes(60 + 30),
         };
         builder.run_test();
     }
 
     #[test]
     fn session_one_pause_several_locks() {
-        let mut builder = TestBuilder{
-            start: from_hour(8,0),
-            end: Some(from_hour(16,0)),
+        let mut builder = TestBuilder {
+            start: from_hour(8, 0),
+            end: Some(from_hour(16, 0)),
             intervals: vec![
-                Event::Lock(from_hour(13,0)),
-                Event::Lock(from_hour(13,10)),
-                Event::Lock(from_hour(13,30)),
-                Event::Unlock(from_hour(14,0)),
-                Event::Close(from_hour(16,0))
+                Event::Lock(from_hour(13, 0)),
+                Event::Lock(from_hour(13, 10)),
+                Event::Lock(from_hour(13, 30)),
+                Event::Unlock(from_hour(14, 0)),
+                Event::Close(from_hour(16, 0)),
             ],
             working: Duration::hours(7),
-            resting: Duration::hours(1)
+            resting: Duration::hours(1),
         };
         builder.run_test();
     }
 
     #[test]
     fn session_one_pause_several_unlocks() {
-        let mut builder = TestBuilder{
-            start: from_hour(8,0),
-            end: Some(from_hour(16,0)),
+        let mut builder = TestBuilder {
+            start: from_hour(8, 0),
+            end: Some(from_hour(16, 0)),
             intervals: vec![
-                Event::Lock(from_hour(13,0)),
-                Event::Unlock(from_hour(14,0)),
-                Event::Unlock(from_hour(14,10)),
-                Event::Unlock(from_hour(14,30)),
-                Event::Close(from_hour(16,0))
+                Event::Lock(from_hour(13, 0)),
+                Event::Unlock(from_hour(14, 0)),
+                Event::Unlock(from_hour(14, 10)),
+                Event::Unlock(from_hour(14, 30)),
+                Event::Close(from_hour(16, 0)),
             ],
             working: Duration::hours(7),
-            resting: Duration::hours(1)
+            resting: Duration::hours(1),
         };
         builder.run_test();
     }
 
     #[test]
     fn session_one_pause_several_lock_unlock_same_time() {
-        let mut builder = TestBuilder{
-            start: from_hour(8,0),
-            end: Some(from_hour(16,0)),
+        let mut builder = TestBuilder {
+            start: from_hour(8, 0),
+            end: Some(from_hour(16, 0)),
             intervals: vec![
-                Event::Lock(from_hour(13,0)),
-                Event::Unlock(from_hour(13,0)),
-                Event::Lock(from_hour(13,0)),
-                Event::Unlock(from_hour(13,0)),
-                Event::Lock(from_hour(13,0)),
-                Event::Unlock(from_hour(14,0)),
-                Event::Close(from_hour(16,0))
+                Event::Lock(from_hour(13, 0)),
+                Event::Unlock(from_hour(13, 0)),
+                Event::Lock(from_hour(13, 0)),
+                Event::Unlock(from_hour(13, 0)),
+                Event::Lock(from_hour(13, 0)),
+                Event::Unlock(from_hour(14, 0)),
+                Event::Close(from_hour(16, 0)),
             ],
             working: Duration::hours(7),
-            resting: Duration::hours(1)
+            resting: Duration::hours(1),
         };
         builder.run_test();
     }
 
     #[test]
     fn long_session_no_pause() {
-        let mut builder = TestBuilder{
-            start: from_hour(8,0),
-            end: Some(from_hour_next_day(8,0)),
-            intervals: vec![Event::Close(from_hour_next_day(8,0))],
+        let mut builder = TestBuilder {
+            start: from_hour(8, 0),
+            end: Some(from_hour_next_day(8, 0)),
+            intervals: vec![Event::Close(from_hour_next_day(8, 0))],
             working: Duration::hours(24),
             ..TestBuilder::default()
         };
@@ -342,8 +352,8 @@ mod tests {
 
     #[test]
     fn check_current_day() {
-        let mut builder = TestBuilder{
-            start: from_hour(8,0),
+        let mut builder = TestBuilder {
+            start: from_hour(8, 0),
             working: Duration::hours(6),
             ..TestBuilder::default()
         };
@@ -353,11 +363,11 @@ mod tests {
 
     #[test]
     fn check_current_day_one_pause() {
-        let mut builder = TestBuilder{
-            start: from_hour(8,0),
+        let mut builder = TestBuilder {
+            start: from_hour(8, 0),
             intervals: vec![
-                Event::Lock(from_hour(13,0)),
-                Event::Unlock(from_hour(14,0))
+                Event::Lock(from_hour(13, 0)),
+                Event::Unlock(from_hour(14, 0)),
             ],
             working: Duration::hours(6),
             resting: Duration::hours(1),
@@ -370,11 +380,9 @@ mod tests {
 
     #[test]
     fn check_current_day_unfinished_pause() {
-        let mut builder = TestBuilder{
-            start: from_hour(8,0),
-            intervals: vec![
-                Event::Lock(from_hour(13,0))
-            ],
+        let mut builder = TestBuilder {
+            start: from_hour(8, 0),
+            intervals: vec![Event::Lock(from_hour(13, 0))],
             working: Duration::hours(5),
             resting: Duration::hours(2),
 
